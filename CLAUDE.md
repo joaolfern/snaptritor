@@ -77,6 +77,17 @@ paths as a native Windows process, directly, with no WSL in between. Do not desi
 collector as something WSL invokes — the packaging technology (Electron, Tauri, .NET, …) is a
 decision for `plan.md`, not for this file.
 
+### Install flow and the client's domain (2026-10-15)
+
+The user specified the real onboarding sequence (`specs/001-shop-rotation-notifier/spec.md`'s
+scenario 8, RF16–RF18): the client PWA is served from **`snaptritor.nosnocabo.com.br`** — the
+user's own domain, not a `*.workers.dev`/`*.pages.dev` default. A first-time visitor opens that
+page on their phone, allows notifications, and sees a short pairing code plus a Windows-installer
+download link while the page shows "not linked"; installing and entering that code once flips it
+to "linked". The Worker serves the installer itself (`GET /download/collector`, same pattern as
+`/images/:key` — no separate static host needed for the binary). Provisioning the custom domain is
+part of the T016 Cloudflare checkpoint, not yet done.
+
 One consequence worth noting early: a native Windows app can ask the OS's own Task Scheduler to
 wake the machine for a scheduled task, which may remove the need for an externally-sent
 Wake-on-LAN packet entirely (nothing in the original doc ever named what would send one). This is

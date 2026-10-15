@@ -40,7 +40,7 @@ what the pause-wake-automation toggle (RF15) directly enables or disables.
 | 5 — Contract first | Yes | `packages/shared` holds every schema crossing a boundary (`InspectionSubmission`, `PushSubscriptionRecord`, `CollectorState`); collector and Worker both import it, never re-declare it. |
 | 6 — Traceability | Set up here, enforced by `/tasks` | Components and data flow below map every RF/NF to a package; `/tasks` assigns a requirement ID to each task from that mapping, so nothing lands without one. |
 | 7 — Runnable without waiting on the house | Yes | `--inspect` runs on demand from the CLI against either the live game or a stored screenshot fixture (for testing the diff/upload path without touching the game at all); Task Scheduler, the wake timer, and the eventual sleep are all outside this core path and can each be disabled independently. |
-| 8 — Secrets never land in the repo | Yes | VAPID keys live in `wrangler secret`. The collector's own Worker-URL + API secret (so a stranger can't POST fake inspections) are injected at **build** time from an env var into the installer, never committed — the shipped binary carrying a secret is not the repo carrying one. |
+| 8 — Secrets never land in the repo | Yes | VAPID keys live in `wrangler secret`. The Worker URL is baked in at build time (not a secret). The collector's `/inspections` auth secret is **not** baked in at all anymore (RF18, added 2026-10-15) — it is issued per install by `POST /pairing/claim` after the player enters the one-time pairing code, and lives only in that install's local `CollectorState`, never in the repo or the shipped binary. |
 
 ## Components and data flow
 
@@ -73,23 +73,40 @@ packages/collector        Electron app, TypeScript. One installed binary, two en
                           what actually stops the PC being woken, not a flag `--inspect` reads,
                           since `--inspect` never runs at all if the task didn't wake anything).
 
-Installer (electron-builder → NSIS .exe)                                    RF11, RF12
+Installer (electron-builder → NSIS .exe)                                    RF11, RF12, RF18
                           Registers the Scheduled Task (wake-capable, runs `--inspect` on the
-                          chosen cadence) and writes the initial CollectorState. No other setup:
-                          the Worker URL and API secret are baked in at build time, not asked of
-                          the player.
+                          chosen cadence) and writes the initial CollectorState. The Worker URL is
+                          baked in at build time; the one thing the player does type is the
+                          pairing code (RF18), prompted on first run — not asked of the player at
+                          any other point.
 
-packages/worker           Cloudflare Worker, TypeScript.                     RF06, RF07
-  POST /inspections        auth by the baked-in secret; validates InspectionSubmission; stores
-                            the image in R2, metadata in KV; fans out Web Push (VAPID) to every
-                            stored subscription; drops a subscription that answers 404/410
+packages/worker           Cloudflare Worker, TypeScript.                RF06, RF07, RF16–RF18
+  POST /inspections        authed by a per-install secret issued at pairing (see RF18 below, not
+                            a single global baked-in secret — see Rejected alternatives); validates
+                            InspectionSubmission; stores the image in R2, metadata in KV; fans out
+                            Web Push (VAPID) to every stored subscription; drops a subscription
+                            that answers 404/410
   POST /subscriptions      RF08 — stores a PushSubscriptionRecord from the client
   GET  /inspections/latest RF09 (client side) — latest image's metadata + R2 URL
+  POST /pairing/code       RF16 — the client calls this right after RF08's subscribe succeeds;
+                            generates a short code (KV, short TTL) tied to that subscription's
+                            endpoint
+  POST /pairing/claim      RF18 — the collector calls this once, with the code the player typed;
+                            validates it (exists, unexpired, unused), marks it used, issues the
+                            per-install secret the collector uses for every later /inspections call,
+                            and flips the paired subscription's "linked" flag
+  GET  /collector/status   RF16 — the client polls this (by its own subscription's endpoint) to
+                            show linked/not-linked
+  GET  /download/collector RF17 — streams the installer `.exe` from R2 (same pattern as
+                            `/images/:key`; no separate static host needed)
 
-packages/client            PWA/TWA, TypeScript.                              RF08, RF09
+packages/client            PWA, TypeScript, served from the user's own domain.   RF08, RF09, RF16, RF17
   service worker           `push` event → `showNotification(title, { image: <R2 url> })` —
                             renders inline, no tap needed (Q09, resolved in spec.md)
-  app shell                `notificationclick` → open, fetch GET /inspections/latest, show it
+  app shell                `notificationclick` → open, fetch GET /inspections/latest, show it;
+                            on load, subscribe (RF08) → POST /pairing/code → show the code +
+                            "not linked" + the RF17 download link; poll GET /collector/status to
+                            flip to "linked" once RF18 completes
 ```
 
 ## Data contracts
@@ -110,6 +127,22 @@ export const PushSubscriptionRecord = z.object({
   endpoint: z.string().url(),
   keys: z.object({ p256dh: z.string(), auth: z.string() }),
   createdAt: z.string().datetime(),
+});
+
+// RF16/RF18 — a short code the client requests after subscribing, shown to the player, and
+// consumed exactly once by the collector on first run.
+export const PairingCode = z.object({
+  code: z.string().length(6),              // short, typeable on a first-run dialog
+  subscriptionEndpoint: z.string().url(),  // which subscription this links, once claimed
+  createdAt: z.string().datetime(),
+  expiresAt: z.string().datetime(),        // short TTL — limits a leaked download link's exposure
+  claimed: z.boolean(),
+});
+
+// What the collector gets back from a successful POST /pairing/claim — its own per-install
+// secret (Article 8: never a secret shared across every install, see Rejected alternatives).
+export const PairingClaimResult = z.object({
+  collectorSecret: z.string(),
 });
 
 export const CollectorState = z.object({
@@ -150,6 +183,7 @@ is stored — the collector's own `--inspect` logs that rejection into `Collecto
 | A game update moves the Shop → Cards navigation path or its loading landmark | Medium | Was true of the old JSON-parsing design too, just moved to a different brittle surface; the navigation steps live behind one module so a game update is a one-file fix, and NF06 surfaces the break immediately instead of silently notifying nothing. |
 | Electron's own startup cost makes a few-second `--inspect` run heavier than a minimal CLI would be | Low | Accepted: the process fully exits when the run finishes, so the cost is transient CPU/RAM a handful of times a day, not a standing footprint — satisfies NF07 as written even though Electron isn't the leanest runtime available. |
 | A captured screenshot is larger than expected | Low | Downscale/compress before upload (PNG → JPEG, cap dimensions); R2's free-tier ceiling has enormous headroom at this volume regardless. |
+| Pairing code guessed or brute-forced before the player enters it | Low | 6 characters plus a short TTL (minutes, not hours) keeps the guessable window small for a single-use, same-room setup step; `/pairing/claim` marks a code used on its first attempt regardless of outcome, so repeated guesses don't get unlimited tries against one code. |
 
 ## Rejected alternatives
 
@@ -171,3 +205,17 @@ is stored — the collector's own `--inspect` logs that rejection into `Collecto
 - **Querying `shop_runtime_url` directly instead of screenshotting.** The other option feature
   `000` raised; the user chose screenshots, so the ToS exposure of querying the game's own
   undocumented endpoint was never taken on.
+- **A single global `COLLECTOR_SECRET` baked into every installer (the original design, built in
+  T004).** Simple, but the user flagged the real risk directly when choosing how linking should
+  work (2026-10-15): if the download link ever leaked, anyone's installer would carry a secret
+  valid against the real deployment. Superseded by RF18's pairing flow — each install gets its own
+  secret, issued only after the player proves they have the code shown on their own phone. T004's
+  existing single-secret check needs updating to look up a per-install secret instead; not done
+  yet (see `tasks.md`'s T019).
+- **A QR code instead of a typed pairing code.** Scans faster, but needs camera access from
+  whatever is showing the collector's first-run prompt (the installer or the status window), which
+  is more native-API surface for a small convenience gain. A 6-character typed code is good enough
+  for a one-time, same-room setup step.
+- **Tying the link to the subscription via a token baked into the download URL itself**, with no
+  separate code step. Removes the typing, but then the download link *is* the credential — exactly
+  the leak the user was guarding against by asking for a pairing code in the first place.

@@ -8,7 +8,10 @@ verification step has actually been run and passed — not when the code looks r
 Tasks T001–T006 need only WSL/Node — no Windows GUI. T007–T013 need the native Windows automation
 to actually run, which is available here via WSL→Windows interop (`powershell.exe`/`node.exe`
 against the repo's own UNC path) and, for T009, the real game. T016–T018 are checkpoints that need
-the user directly (a Cloudflare account, the physical PC's BIOS, an Android device).
+the user directly (a Cloudflare account, the physical PC's BIOS, an Android device). T019 (added
+2026-10-15, after T001–T011 were already built — the user's install-flow requirement) is
+WSL/Node-only like T001–T006; it lands out of numeric order because it follows from T014–T016's
+client/deployment work rather than the original build order.
 
 ## Coverage check
 
@@ -29,6 +32,9 @@ the user directly (a Cloudflare account, the physical PC's BIOS, an Android devi
 | RF13 | T002, T012 |
 | RF14 | T002, T012 |
 | RF15 | T002, T011, T012 |
+| RF16 | T015, T019 |
+| RF17 | T015, T019 |
+| RF18 | T012, T013, T019 |
 
 No orphans: every task below cites at least one requirement it serves.
 
@@ -109,6 +115,14 @@ No orphans: every task below cites at least one requirement it serves.
   URL" NF08 needs had no natural source without it — R2's own dev-domain public access is a T016
   deployment decision, so the Worker serves its own images instead, keeping this task testable
   with zero Cloudflare account dependency.
+
+  **Superseded in part, 2026-10-15 (RF18):** the single baked-in `env.COLLECTOR_SECRET` this task
+  checks against is being replaced by a per-install secret issued at pairing time — a leaked
+  installer download link must not carry a credential valid for the whole deployment. The auth
+  check here needs to become "does this secret match *some* install's issued secret" instead of
+  "does it match the one global secret". Tracked as part of T019, not redone here — this task's
+  own tests and behavior are still correct for what RF05/RF06/NF06/NF08 ask, only the auth model
+  underneath changes.
 
 ### T005 — `packages/worker`: VAPID Web Push fanout `[parallel-safe with T004, T006]`
 
@@ -349,21 +363,28 @@ No orphans: every task below cites at least one requirement it serves.
   naive `Select-String 'Enabled'` match silently found nothing — exactly the kind of fragility the
   PowerShell object cmdlets (`$task.State`, a real enum, not a localized string) avoid.
 
-### T012 — `packages/collector`: status window
+### T012 — `packages/collector`: status window + first-run pairing prompt
 
-- **Serves:** RF13, RF14, RF15
+- **Serves:** RF13, RF14, RF15, RF18
 - **Files:** `packages/collector/src/ui/status.html`, `packages/collector/src/ui/main.ts`,
   `packages/collector/src/cli.ts` (default entry added)
 - **Do:** An Electron `BrowserWindow` (no Chromium devtools shown) that reads `CollectorState` (T002)
   on open and renders last/next inspection time plus two toggle switches: one flips
   `inspectionPaused` and writes state back (T002's `writeState`); the other calls T011's
   enable/disable on the registered Scheduled Task directly (not just a flag `--inspect` reads,
-  since `--inspect` never runs at all if the task didn't wake anything).
+  since `--inspect` never runs at all if the task didn't wake anything). **Added for RF18:** if
+  `CollectorState` has no stored secret yet (first run), show a one-field pairing-code prompt
+  instead of the normal status view; submitting it calls T019's `POST /pairing/claim`, and on
+  success stores the returned `collectorSecret` in `CollectorState` and switches to the normal
+  view. An expired/already-used code shows the Worker's own rejection reason, not a generic error.
 - **Verify:** Via interop, with Electron installed:
-  `powershell.exe -Command "node ...\collector\dist\cli.js"` opens the window showing the values
-  currently in `state.json`; clicking the inspection-pause toggle updates `state.json`'s
-  `inspectionPaused` on disk (confirmed by reading the file after); clicking the wake-pause toggle
-  changes the registered task's enabled state (confirmed by `schtasks /query`).
+  `powershell.exe -Command "node ...\collector\dist\cli.js"` — with no stored secret, shows the
+  pairing prompt; entering a code obtained from T019's `POST /pairing/code` (against a local
+  `wrangler dev`) stores a secret in `state.json` and switches views. With a secret already stored,
+  opens straight to the normal view showing the values currently in `state.json`; clicking the
+  inspection-pause toggle updates `state.json`'s `inspectionPaused` on disk (confirmed by reading
+  the file after); clicking the wake-pause toggle changes the registered task's enabled state
+  (confirmed by `schtasks /query`).
 - **Status:** `[ ]`
 
 ### T013 — `packages/collector`: Windows installer
@@ -373,7 +394,9 @@ No orphans: every task below cites at least one requirement it serves.
   script added)
 - **Do:** `electron-builder` configured for an NSIS target. The install step (NSIS custom script or
   a post-install hook invoking T011's registration) creates the Scheduled Task and writes the
-  initial `state.json`, so first run needs nothing from the player beyond running the installer.
+  initial `state.json`, so first run needs nothing from the player beyond running the installer —
+  and then, per T012, entering the pairing code shown on their phone (RF18's one deliberate
+  exception to "nothing to configure").
 - **Verify:** Via interop: `powershell.exe -Command "cd ...\collector; npm run build:installer"`
   produces `dist/Snaptritor Setup <version>.exe` with a non-zero size. Actually running the
   installer end to end on a clean account is not exercised by this task (no clean test account
@@ -394,24 +417,34 @@ No orphans: every task below cites at least one requirement it serves.
   returns an object with `image` set to that exact URL and no text field claiming to name cards.
 - **Status:** `[ ]`
 
-### T015 — `packages/client`: app shell and subscribe flow `[parallel-safe with T014]`
+### T015 — `packages/client`: app shell, subscribe flow, and pairing UI `[parallel-safe with T014]`
 
-- **Serves:** RF08, RF09
+- **Serves:** RF08, RF09, RF16, RF17
 - **Files:** `packages/client/src/app.ts`, `packages/client/index.html` (new)
 - **Do:** A subscribe button that requests notification permission, creates a `PushSubscription`
-  via the browser's Push API, and `POST`s it to the Worker's `/subscriptions` (T003). The main view
-  fetches `GET /inspections/latest` and displays the image.
+  via the browser's Push API, and `POST`s it to the Worker's `/subscriptions` (T003). Right after a
+  successful subscribe, call T019's `POST /pairing/code` and render the returned code prominently,
+  next to a `GET /download/collector` link (RF17) and a "not linked" status (RF16); poll T019's
+  `GET /collector/status` (for this subscription's endpoint) every few seconds and switch to
+  "linked" once the collector claims it — no page reload required, but a reload must also pick up
+  the right state (scenario 8). The main view fetches `GET /inspections/latest` and displays the
+  image.
 - **Verify:** `pnpm --filter client build` succeeds (typecheck + bundle). End-to-end subscribe →
-  receive → display is only provable on a real device, deferred to T017.
+  receive → display is only provable on a real device, deferred to T017. The pairing code →
+  "linked" transition is provable against a local `wrangler dev` plus T012's collector pointed at
+  it, without needing a real device or deployment.
 - **Status:** `[ ]`
 
 ### T016 — Checkpoint: Cloudflare account, bindings, VAPID keys, deploy
 
-- **Serves:** RF06, RF07, Article 8
+- **Serves:** RF06, RF07, RF17, Article 8
 - **Files:** none from here — fills in real values T003's `wrangler.toml` left as placeholders
 - **Do:** Ask the user to log into (or create) a Cloudflare account and authorize `wrangler`. Create
   the real KV namespace and R2 bucket, generate a VAPID keypair, and store it with
-  `wrangler secret put VAPID_PRIVATE_KEY` (Article 8 — never in the repo). Deploy the Worker.
+  `wrangler secret put VAPID_PRIVATE_KEY` (Article 8 — never in the repo). Point the Worker at the
+  user's own domain, `snaptritor.nosnocabo.com.br` (`CLAUDE.md`'s 2026-10-15 note — a custom route,
+  not the default `*.workers.dev`), and upload the built installer to R2 for T019's
+  `GET /download/collector` to serve. Deploy the Worker.
 - **Verify:** `pnpm --filter worker exec wrangler deploy` succeeds; a manual `curl` `POST` to the
   deployed `/subscriptions` with a real browser-generated subscription returns `201`; subscribing a
   real device and manually `POST`ing a test image to `/inspections` results in an actual push
@@ -441,4 +474,41 @@ No orphans: every task below cites at least one requirement it serves.
 - **Verify:** The user confirms wake timers are enabled (or what they found), and states the
   cadence they want; T011's registration is updated with the real times if they differ from the
   placeholder used during T011's own testing.
+- **Status:** `[ ]`
+
+### T019 — `packages/worker`: pairing endpoints, and per-install secrets
+
+- **Serves:** RF16, RF17, RF18 (added 2026-10-15, after T001–T011 were already built — see the
+  user's install-flow requirement and the resulting spec/plan changes)
+- **Files:** `packages/shared/src/schemas.ts` (`PairingCode`, `PairingClaimResult` added;
+  `CollectorState` gains `collectorSecret: z.string().nullable()`), `packages/worker/src/pairing.ts`,
+  `packages/worker/test/pairing.test.ts` (new); `packages/worker/src/inspections.ts` (auth check
+  changed from a single `env.COLLECTOR_SECRET` equality check to a per-install secret lookup);
+  `packages/worker/src/index.ts` (routes added); `packages/collector/src/state.ts` (`collectorSecret`
+  threaded through alongside the existing fields)
+- **Do:**
+  - `POST /pairing/code` — generates a random 6-character code, stores `PairingCode` in KV keyed by
+    the code with a short TTL (e.g. 15 minutes) and `claimed: false`, tied to the subscription
+    endpoint the client just registered (T003).
+  - `POST /pairing/claim` — given a code: `404`/expired if it's not in KV or past `expiresAt`,
+    `409` if `claimed` is already `true` (one attempt per code, per the plan's stated mitigation —
+    claiming it marks it used regardless of whether the attempt itself was "correct", since the
+    code was already consumed by someone trying it); otherwise generates a fresh per-install secret,
+    stores it (keyed by secret → valid, for `/inspections`' lookup) and marks the paired
+    subscription "linked" (a KV flag keyed by subscription endpoint), then returns
+    `PairingClaimResult`.
+  - `GET /collector/status?endpoint=<subscription endpoint>` — returns `{ linked: boolean }` by
+    checking that flag (RF16's polling target).
+  - `GET /download/collector` — streams the installer from R2 (same pattern as `handleGetImage`),
+    `404` if T016 hasn't uploaded one yet.
+  - `POST /inspections`'s auth check changes from `providedSecret !== env.COLLECTOR_SECRET` to a KV
+    lookup of the provided secret against the set issued by `/pairing/claim` — this is the follow-up
+    T004's own entry flags.
+- **Verify:** `pnpm --filter worker test` — `POST /pairing/code` returns a 6-character code;
+  `POST /pairing/claim` with that code returns a secret and flips `/collector/status` to
+  `linked: true`; claiming the same code again returns `409` and does not re-flip anything; an
+  expired code (test by setting a KV entry with a past `expiresAt` directly) returns an error
+  rather than succeeding; `POST /inspections` with the newly-issued secret succeeds, with the old
+  single dev-placeholder secret from `wrangler.toml`'s `[vars]` now rejected (`401`) since it was
+  never issued through pairing.
 - **Status:** `[ ]`

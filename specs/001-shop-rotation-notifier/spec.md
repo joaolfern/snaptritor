@@ -58,6 +58,11 @@ only the screen itself, once the shop is on it.
 7. **Given** the user opens the collector's window, **when** they look at it, **then** they see
    when it last inspected the shop and when it will next do so, and can pause inspection or pause
    the automation that wakes the PC, each with one action.
+8. **Given** a first-time visitor opens the client's web page on their phone, **when** they grant
+   notification permission, **then** the page shows no desktop collector is linked yet, a short
+   pairing code, and a link to download the Windows installer; **when** they install it on their
+   PC and enter that code once on first run, **then** the same page (reloaded or polling) shows a
+   desktop collector is now linked.
 
 ## Functional requirements
 
@@ -78,6 +83,9 @@ only the screen itself, once the shop is on it.
 | RF13 | Show, in the collector's own window, when it last inspected the shop and when it will next do so. |
 | RF14 | Let the player pause and resume shop inspection from the collector's window. |
 | RF15 | Let the player pause and resume the automation that wakes the PC, independently of pausing inspection. |
+| RF16 | Show, on the client, whether a desktop collector is currently linked to this player's notification subscription. |
+| RF17 | Let the player download the Windows installer directly from the client. |
+| RF18 | Link the installed collector to the player's existing notification subscription automatically, with no code or manual step on either side, so RF16 reflects it. |
 
 ## Non-functional requirements
 
@@ -132,6 +140,15 @@ only the screen itself, once the shop is on it.
   the "next inspection" display reflects the pause rather than showing a time that will not happen.
 - **RF15** — Given wake automation is paused and a scheduled time arrives while the PC is asleep,
   then the PC is not woken; resuming it restores the normal schedule without reinstalling.
+- **RF16** — Given no collector has ever linked itself, when the client page loads, then it shows
+  "no desktop linked"; given one has, then it shows linked (reasonably current — polling or a
+  reload is enough, no live-socket requirement).
+- **RF17** — Given the client page, when the player looks for it, then a download link for the
+  Windows installer is present and works, with no separate site or account needed to reach it.
+- **RF18** — Given a pairing code shown on the client (RF16), when the player enters it once in the
+  collector on first run, then the client's "linked" status reflects it; given an expired or
+  already-used code, then the collector reports that clearly rather than silently failing or
+  claiming a stale link.
 
 ## Open questions
 
@@ -146,6 +163,7 @@ only the screen itself, once the shop is on it.
 | Q04 | ~~Can Web Push with VAPID be sent from the chosen host's runtime?~~ Resolved: Cloudflare Workers implement the same `SubtleCrypto` Web Crypto API browsers do, which covers VAPID's ECDSA signing and the Web Push encryption (AES-GCM, HKDF) with no extra service. (doc item T05) | RF07 | resolved |
 | Q05 | ~~Where do card display names come from?~~ Moot — RF09 now shows the raw screenshot, not decoded names. | — | resolved |
 | Q06 | ~~Should PC wake use OS self-wake instead of an externally-sent Wake-on-LAN packet?~~ Resolved in `plan.md`: self-wake, via the Scheduled Task's own "wake this computer" flag. Removes the undefined "who sends the packet" problem entirely; RF15's pause toggle disables that flag directly. | RF01, RF15 | resolved |
+| Q10 | ~~How does RF18's "linking" actually work, mechanically?~~ Resolved by the user: a short pairing code. The client requests one after the player subscribes (RF08) and displays it alongside "not linked yet"; the installer/collector asks for it once on first run and sends it to the Worker to claim. Guards against a leaked download link silently claiming someone else's subscription — the code expires after a short window. | RF16, RF18 | resolved |
 
 ## Dependencies
 
