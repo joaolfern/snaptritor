@@ -35,8 +35,9 @@ No orphans: every task above serves a listed requirement.
 - **Verify:** `node scripts/observe.mjs snap smoke` exits 0, prints the offered card set
   (currently `PunisherWarMachine, KarenPage, WebSling, ElsaBloodstone (ElsaBloodstone_05),
   JeffTheBabyLandShark (JeffTheBabyLandShark_08)`), and `snapshots/smoke/manifest.json` lists
-  ~45 files. Confirm `git status` shows nothing under `snapshots/`.
-- **Status:** `[ ]`
+  36 files. Confirm `git status` shows nothing under `snapshots/`.
+- **Status:** `[x]` — ran clean; 36 files matches the source directory exactly, `git status` shows
+  nothing under `snapshots/`. Smoke snapshot deleted afterward.
 
 ### T002 — Take the baseline, game closed
 
@@ -45,7 +46,9 @@ No orphans: every task above serves a listed requirement.
 - **Do:** With Marvel Snap **not** running, `node scripts/observe.mjs snap baseline`. Record the four
   values in `findings.md` under "Baseline".
 - **Verify:** `snapshots/baseline/manifest.json` exists and `findings.md` quotes the four values.
-- **Status:** `[ ]`
+- **Status:** `[x]` — game confirmed closed via `tasklist.exe` immediately before the snapshot.
+  `NextRefresh` reads `2026-05-14T03:00:00Z`, five months in the past, already strong evidence of a
+  stale file. See `findings.md`.
 
 ### T003 — Checkpoint: menu-only session (needs the user)
 
