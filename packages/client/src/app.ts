@@ -20,7 +20,9 @@ const els = {
   latestImage: document.getElementById("latest-image") as HTMLImageElement,
 };
 
-let statusPollHandle: ReturnType<typeof setInterval> | undefined;
+const LINK_STATUS_THROTTLE_MS = 20_000;
+let lastLinkStatusCheckAt = 0;
+let stopWatchingLinkStatus: (() => void) | undefined;
 
 async function subscribe(): Promise<PushSubscription> {
   const permission = await Notification.requestPermission();
@@ -63,23 +65,43 @@ async function requestPairingCode(endpoint: string): Promise<{ code: string }> {
   return response.json();
 }
 
-function startPollingLinkStatus(endpoint: string): void {
-  if (statusPollHandle) clearInterval(statusPollHandle);
-  const poll = async () => {
+/**
+ * Replaces a blind `setInterval` (burned battery/requests on a backgrounded tab for no reason —
+ * the player isn't watching it anyway) with an event-driven check: refetch when the tab actually
+ * regains attention, throttled so switching tabs back and forth rapidly can't hammer the Worker.
+ */
+function watchLinkStatus(endpoint: string): void {
+  if (stopWatchingLinkStatus) stopWatchingLinkStatus();
+
+  const check = async (force: boolean) => {
+    const now = Date.now();
+    if (!force && now - lastLinkStatusCheckAt < LINK_STATUS_THROTTLE_MS) return;
+    lastLinkStatusCheckAt = now;
+
     const response = await fetch(pairingStatusUrl(endpoint));
     const { linked } = (await response.json()) as { linked: boolean };
     if (linked) {
       els.statusText.textContent = "Desktop linked";
       els.pairingSection.classList.add("linked");
-      if (statusPollHandle) clearInterval(statusPollHandle);
+      stopWatchingLinkStatus?.();
     }
   };
-  statusPollHandle = setInterval(poll, 4000);
-  poll(); // check immediately too, not just after the first interval
+
+  const onFocusOrVisible = () => {
+    if (document.visibilityState === "visible") check(false);
+  };
+  document.addEventListener("visibilitychange", onFocusOrVisible);
+  window.addEventListener("focus", onFocusOrVisible);
+  stopWatchingLinkStatus = () => {
+    document.removeEventListener("visibilitychange", onFocusOrVisible);
+    window.removeEventListener("focus", onFocusOrVisible);
+    stopWatchingLinkStatus = undefined;
+  };
+
+  check(true); // check immediately too, not just on the next focus/visibility event
 }
 
 async function showPairingView(endpoint: string): Promise<void> {
-  els.downloadLink.href = DOWNLOAD_INSTALLER_URL;
   els.statusText.textContent = "Not linked yet";
 
   const alreadyLinked = await fetch(pairingStatusUrl(endpoint)).then((r) => r.json() as Promise<{ linked: boolean }>);
@@ -92,7 +114,7 @@ async function showPairingView(endpoint: string): Promise<void> {
 
   const { code } = await requestPairingCode(endpoint);
   els.pairingCode.textContent = code;
-  startPollingLinkStatus(endpoint);
+  watchLinkStatus(endpoint);
 }
 
 async function showLatestOffer(): Promise<void> {
@@ -115,6 +137,13 @@ async function onSubscribeClick(): Promise<void> {
 }
 
 async function init(): Promise<void> {
+  // RF17: "a download link... is present and works, with no separate site or account needed" —
+  // the installer download has no actual dependency on push support or a subscription existing,
+  // so it must not be gated behind either. Confirmed live (real user report): this used to be set
+  // only inside showPairingView(), which never runs before a successful subscribe — until then
+  // the link kept its HTML default href="#", so clicking it silently did nothing.
+  els.downloadLink.href = DOWNLOAD_INSTALLER_URL;
+
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
     els.statusText.textContent = "Push notifications aren't supported in this browser";
     els.subscribeButton.disabled = true;
