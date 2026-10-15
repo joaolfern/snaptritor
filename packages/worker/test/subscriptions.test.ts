@@ -48,6 +48,16 @@ describe("POST /subscriptions", () => {
   });
 });
 
+describe("GET /vapid-public-key", () => {
+  it("returns the configured VAPID public key as plain text", async () => {
+    const response = await worker.fetch(new Request("http://worker.local/vapid-public-key"), env, {} as ExecutionContext);
+    expect(response.status).toBe(200);
+    const text = await response.text();
+    expect(text.length).toBeGreaterThan(0);
+    expect(text).toBe(env.VAPID_PUBLIC_KEY);
+  });
+});
+
 describe("unknown routes", () => {
   it("returns 404", async () => {
     const request = new Request("http://worker.local/nonexistent");

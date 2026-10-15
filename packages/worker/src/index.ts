@@ -41,6 +41,13 @@ export default {
       return handleGetDownloadCollector(env);
     }
 
+    // RF08 needs this to subscribe at all: pushManager.subscribe() requires the VAPID public key
+    // as its applicationServerKey, and the client (a static build) has no other way to know it —
+    // not scoped explicitly in T015's own task text, but a direct, necessary consequence of it.
+    if (request.method === "GET" && url.pathname === "/vapid-public-key") {
+      return new Response(env.VAPID_PUBLIC_KEY, { headers: { "Content-Type": "text/plain" } });
+    }
+
     return Response.json({ error: "not found" }, { status: 404 });
   },
 } satisfies ExportedHandler<Env>;

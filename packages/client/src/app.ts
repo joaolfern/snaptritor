@@ -1,0 +1,140 @@
+/**
+ * The client app shell: subscribe flow (RF08), the main offer view (RF09), and the pairing UI
+ * (RF16, RF17 — scenario 8). Same-origin fetches throughout: this file and the Worker's API both
+ * live under the user's own domain (plan.md), so no CORS and no separate base-URL config.
+ */
+
+// .js, not .ts: this file is actually emitted to a real dist/app.js for a browser to load (unlike
+// the Node-only packages elsewhere in this repo, which never emit and can import .ts directly) —
+// tsc passes import specifiers through unchanged, so the specifier must match the emitted sibling.
+import { DOWNLOAD_INSTALLER_URL, pairingStatusUrl, urlBase64ToUint8Array } from "./pure.js";
+
+// --- DOM wiring --------------------------------------------------------------------------------
+
+const els = {
+  subscribeButton: document.getElementById("subscribe") as HTMLButtonElement,
+  statusText: document.getElementById("status-text") as HTMLElement,
+  pairingCode: document.getElementById("pairing-code") as HTMLElement,
+  downloadLink: document.getElementById("download-link") as HTMLAnchorElement,
+  pairingSection: document.getElementById("pairing-section") as HTMLElement,
+  latestImage: document.getElementById("latest-image") as HTMLImageElement,
+};
+
+let statusPollHandle: ReturnType<typeof setInterval> | undefined;
+
+async function subscribe(): Promise<PushSubscription> {
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") {
+    throw new Error("Notification permission was not granted");
+  }
+
+  const registration = await navigator.serviceWorker.ready;
+  const existing = await registration.pushManager.getSubscription();
+  if (existing) return existing;
+
+  const vapidPublicKey = await (await fetch("/vapid-public-key")).text();
+  return registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    // lib.dom.d.ts types Uint8Array generically over its buffer (could theoretically be a
+    // SharedArrayBuffer); a freshly-constructed one from pure.ts never is one. Cast, don't lie.
+    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource,
+  });
+}
+
+async function registerSubscription(subscription: PushSubscription): Promise<void> {
+  const json = subscription.toJSON();
+  await fetch("/subscriptions", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      endpoint: subscription.endpoint,
+      keys: { p256dh: json.keys?.p256dh ?? "", auth: json.keys?.auth ?? "" },
+      createdAt: new Date().toISOString(),
+    }),
+  });
+}
+
+async function requestPairingCode(endpoint: string): Promise<{ code: string }> {
+  const response = await fetch("/pairing/code", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ subscriptionEndpoint: endpoint }),
+  });
+  return response.json();
+}
+
+function startPollingLinkStatus(endpoint: string): void {
+  if (statusPollHandle) clearInterval(statusPollHandle);
+  const poll = async () => {
+    const response = await fetch(pairingStatusUrl(endpoint));
+    const { linked } = (await response.json()) as { linked: boolean };
+    if (linked) {
+      els.statusText.textContent = "Desktop linked";
+      els.pairingSection.classList.add("linked");
+      if (statusPollHandle) clearInterval(statusPollHandle);
+    }
+  };
+  statusPollHandle = setInterval(poll, 4000);
+  poll(); // check immediately too, not just after the first interval
+}
+
+async function showPairingView(endpoint: string): Promise<void> {
+  els.downloadLink.href = DOWNLOAD_INSTALLER_URL;
+  els.statusText.textContent = "Not linked yet";
+
+  const alreadyLinked = await fetch(pairingStatusUrl(endpoint)).then((r) => r.json() as Promise<{ linked: boolean }>);
+  if (alreadyLinked.linked) {
+    els.statusText.textContent = "Desktop linked";
+    els.pairingSection.classList.add("linked");
+    els.pairingCode.textContent = "";
+    return;
+  }
+
+  const { code } = await requestPairingCode(endpoint);
+  els.pairingCode.textContent = code;
+  startPollingLinkStatus(endpoint);
+}
+
+async function showLatestOffer(): Promise<void> {
+  const response = await fetch("/inspections/latest");
+  if (!response.ok) return; // nothing collected yet — leave the placeholder
+  const { imageUrl } = (await response.json()) as { imageUrl: string };
+  els.latestImage.src = imageUrl;
+}
+
+async function onSubscribeClick(): Promise<void> {
+  els.subscribeButton.disabled = true;
+  try {
+    const subscription = await subscribe();
+    await registerSubscription(subscription);
+    await showPairingView(subscription.endpoint);
+  } catch (err) {
+    els.statusText.textContent = err instanceof Error ? err.message : "Could not subscribe";
+    els.subscribeButton.disabled = false;
+  }
+}
+
+async function init(): Promise<void> {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    els.statusText.textContent = "Push notifications aren't supported in this browser";
+    els.subscribeButton.disabled = true;
+    return;
+  }
+
+  await navigator.serviceWorker.register("/sw.js");
+
+  // Scenario 5/8: a returning visitor with an existing subscription skips straight to the
+  // pairing/status view — no need to click "subscribe" again.
+  const registration = await navigator.serviceWorker.ready;
+  const existing = await registration.pushManager.getSubscription();
+  if (existing) {
+    els.subscribeButton.style.display = "none";
+    await showPairingView(existing.endpoint);
+  } else {
+    els.subscribeButton.addEventListener("click", onSubscribeClick);
+  }
+
+  await showLatestOffer();
+}
+
+init();

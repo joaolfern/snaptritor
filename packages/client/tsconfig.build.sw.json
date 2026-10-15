@@ -1,0 +1,4 @@
+{
+  "extends": "./tsconfig.sw.json",
+  "exclude": ["src/sw.test.ts"]
+}

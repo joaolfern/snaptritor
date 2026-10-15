@@ -416,12 +416,21 @@ No orphans: every task below cites at least one requirement it serves.
   `ServiceWorkerGlobalScope`.
 - **Verify:** `pnpm --filter client test` — `buildNotificationOptions` given a known payload
   returns an object with `image` set to that exact URL and no text field claiming to name cards.
-- **Status:** `[ ]`
+- **Status:** `[x]` — 3/3 tests pass. One real fix: the event-listener registration
+  (`self.addEventListener(...)`) ran at module load, so importing the file from plain Node (as the
+  test does) threw `ReferenceError: self is not defined` before any test could even run — `self`
+  only exists in a real service-worker context. Guarded the wiring behind
+  `typeof self !== "undefined"` so the pure function stays importable on its own, same spirit as
+  the task's own stated intent, just not achievable by file-splitting alone.
 
 ### T015 — `packages/client`: app shell, subscribe flow, and pairing UI `[parallel-safe with T014]`
 
 - **Serves:** RF08, RF09, RF16, RF17
-- **Files:** `packages/client/src/app.ts`, `packages/client/index.html` (new)
+- **Files:** `packages/client/src/app.ts`, `packages/client/src/pure.ts`,
+  `packages/client/src/app.test.ts`, `packages/client/index.html` (new); `packages/worker/src/
+  index.ts` (`GET /vapid-public-key` added — not explicitly scoped by this task's own text, but a
+  direct, necessary consequence of it: `pushManager.subscribe()` needs the VAPID public key as its
+  `applicationServerKey`, and a static client build has no other way to know it)
 - **Do:** A subscribe button that requests notification permission, creates a `PushSubscription`
   via the browser's Push API, and `POST`s it to the Worker's `/subscriptions` (T003). Right after a
   successful subscribe, call T019's `POST /pairing/code` and render the returned code prominently,
@@ -434,7 +443,22 @@ No orphans: every task below cites at least one requirement it serves.
   receive → display is only provable on a real device, deferred to T017. The pairing code →
   "linked" transition is provable against a local `wrangler dev` plus T012's collector pointed at
   it, without needing a real device or deployment.
-- **Status:** `[ ]`
+- **Status:** `[x]` — build succeeds, emitting exactly `app.js`/`pure.js`/`sw.js` to `dist/` (no
+  test files mixed in — added `tsconfig.build.json`/`tsconfig.build.sw.json`, which `exclude` the
+  `.test.ts` files the plain typecheck configs `include`, since a real browser build must emit
+  only what it actually ships). `pure.ts` split out from `app.ts` for the same reason T014 needed
+  the `self` guard — `app.ts` touches `document` at module scope, so its pure helpers
+  (`pairingStatusUrl`, `urlBase64ToUint8Array`) had to live somewhere importable from plain Node;
+  3 tests added for them. Two real fixes along the way: `tsc`'s DOM-lib `Uint8Array` typing (newer
+  lib.dom.d.ts makes it generic over its buffer type, which doesn't satisfy `BufferSource` without
+  a cast — a real, if cosmetic, type-strictness wrinkle, not a logic bug) on
+  `applicationServerKey`; and every in-repo `.ts`-extension import had to become `.js` here
+  specifically, unlike `packages/collector/native/`'s raw-Node code — this package actually emits
+  real browser-loadable files, and `tsc` passes import specifiers through unchanged, so the
+  specifier has to match what gets emitted, not what's on disk as source.
+  The full subscribe → pairing-code → collector-claims-it → "linked" loop is not run end-to-end
+  here (needs a browser and a running collector together) — deferred to T017 as the task's own
+  Verify text already said, now doubly true with the pairing step added.
 
 ### T016 — Checkpoint: Cloudflare account, bindings, VAPID keys, deploy
 

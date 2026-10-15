@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Snaptritor</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+  </head>
+  <body>
+    <h1>Snaptritor</h1>
+    <p>Marvel Snap card-shop rotation notifier.</p>
+
+    <button id="subscribe" type="button">Allow notifications</button>
+    <p id="status-text"></p>
+
+    <section id="pairing-section">
+      <p>Pairing code: <strong id="pairing-code"></strong></p>
+      <p><a id="download-link" href="#">Download the Windows app</a></p>
+    </section>
+
+    <section>
+      <h2>Current shop</h2>
+      <img id="latest-image" alt="Current card shop offer" />
+    </section>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
