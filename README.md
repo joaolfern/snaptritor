@@ -9,18 +9,25 @@ file on the PC and pushes a notification to your phone when the cards change.
 ## How it works
 
 ```
-PC (WSL)                       Cloudflare                  Android
+PC (installed .exe)            Cloudflare                  Android
 ┌──────────────────┐           ┌──────────────┐            ┌──────────────┐
 │ collector        │  changed  │ worker       │  Web Push   │ TWA client   │
 │ read ShopState   │ ────────► │ store + push │ ──────────► │ notification │
 │ parse → diff     │   offer   │ KV / D1      │   (VAPID)   │              │
+│ last/next, pause │           │              │             │              │
 └──────────────────┘           └──────────────┘            └──────────────┘
-   woken by Wake-on-LAN,          always on,                  installed PWA
-   suspends when done             free tier
+   wakes & schedules itself,      always on,                  installed PWA
+   sleeps when done               free tier
 ```
 
 No screen reading and no AI in the data path — the shop is read from JSON, which costs nothing to
 run and does not break when the game's UI changes.
+
+The collector ships as a single Windows installer. Once installed it runs unattended on its own
+schedule — no WSL, no terminal — and its small window shows the last and next inspection time, with
+independent controls to pause inspection and to pause the automation that wakes the PC. WSL is
+where this repo is developed and where feature `000`'s experiments run, not where the shipped
+collector lives.
 
 ## Status
 
@@ -40,7 +47,7 @@ See `CLAUDE.md` for the validated environment facts and the game-state layout.
 
 ## Requirements
 
-- Node 24+, pnpm 11+
-- WSL2 with the Windows drive mounted at `/mnt/c`
-- Marvel Snap installed on the same Windows host
-- A Cloudflare account (free tier) for the Worker
+To develop: Node 24+, pnpm 11+, WSL2 with the Windows drive mounted at `/mnt/c`.
+
+To run: a Windows PC with Marvel Snap installed, and a Cloudflare account (free tier) for the
+Worker. No WSL is needed to run the installed collector — only to build it.

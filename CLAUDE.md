@@ -70,8 +70,30 @@ Related files worth knowing:
 current). Feature `000-shopstate-write-trigger` exists to settle this; the collector's design
 depends on the answer, so do not design around a guess.
 
+## Delivery: the collector ships as an installed Windows app, not a WSL script
+
+The user's requirement (2026-10-15): the final collector is a single Windows installer (`.exe`).
+Once installed, it runs its own schedule unattended — no WSL, no terminal, no Claude Code session —
+and shows a small window with the last/next inspection time plus two independent controls: pause
+inspection, and pause the automation that wakes the PC. This is captured as RF11–RF15 in
+`specs/001-shop-rotation-notifier/spec.md`; read that before touching the collector's design.
+
+This changes where WSL sits in the picture: **WSL is the development and experimentation
+environment only.** Everything validated above (the `/mnt/c` paths, the BOM, the parsing traps) was
+learned from WSL because that is where this Claude Code session runs, and feature `000`'s spike
+still runs its experiments from WSL for the same reason. But the shipped collector reads those same
+paths as a native Windows process, directly, with no WSL in between. Do not design the production
+collector as something WSL invokes — the packaging technology (Electron, Tauri, .NET, …) is a
+decision for `plan.md`, not for this file.
+
+One consequence worth noting early: a native Windows app can ask the OS's own Task Scheduler to
+wake the machine for a scheduled task, which may remove the need for an externally-sent
+Wake-on-LAN packet entirely (nothing in the original doc ever named what would send one). This is
+flagged as Open Question Q06 in the `001` spec rather than decided here.
+
 ## Conventions
 
 - Specs, code, comments and commit messages in English. The shared doc stays Portuguese.
-- `packages/*` is a pnpm workspace: `shared` (contracts), `collector` (WSL), `worker` (Cloudflare),
-  `client` (PWA/TWA). Packages are created when a task calls for them, not in advance.
+- `packages/*` is a pnpm workspace: `shared` (contracts), `collector` (the installed Windows app),
+  `worker` (Cloudflare), `client` (PWA/TWA). Packages are created when a task calls for them, not
+  in advance.

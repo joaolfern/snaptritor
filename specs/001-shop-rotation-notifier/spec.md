@@ -1,7 +1,9 @@
 # Spec: Shop rotation notifier
 
 - **ID:** `001-shop-rotation-notifier`
-- **Status:** draft — blocked on feature `000`'s verdict for RF02 and RF10
+- **Status:** draft — blocked on feature `000`'s verdict for RF02 and RF10. Delivery requirements
+  (RF11–RF15) were added 2026-10-15, after the user specified the collector ships as an installed
+  Windows application; they do not depend on feature `000`.
 - **Source:** the shared doc [Notificador de Loja do Marvel Snap](https://claude.ai/code/artifact/8f3c8a0e-8be1-4cd6-804b-536abe9155b2),
   requirements RF01–RF10. Requirement IDs are kept identical to the doc's so the two stay comparable.
 
@@ -25,7 +27,9 @@ checking it is tedious, and a card worth buying sits unbought for eight hours.
 - Buying, freezing or reserving cards. Snaptritor reads; the player acts.
 - Tracking anything but the card shop: no bundles, no daily offers, no gold vendor, no battle pass.
 - More than one account or player. Single-user by design.
-- A browsable history or UI. The notification is the product; there is no dashboard in v1.
+- A browsable history of past rotations, settings beyond first-run setup, or any UI surface
+  beyond the status display and two pause controls in RF13–RF15. The notification stays the
+  primary channel; the desktop app's own window is a thin status/control surface, not a dashboard.
 - Running when the PC is unavailable. If the machine cannot be woken, that rotation is simply missed.
 
 ## User scenarios
@@ -41,6 +45,12 @@ checking it is tedious, and a card worth buying sits unbought for eight hours.
    current offer — the same data the notification carried, not a stale cache.
 5. **Given** the player reinstalls or clears the client, **when** they re-allow notifications,
    **then** they start receiving them again without any server-side intervention.
+6. **Given** the user has just run the installer on their Windows PC, **when** setup finishes,
+   **then** the collector is already scheduled and needs no further action to run its first
+   inspection.
+7. **Given** the user opens the collector's window, **when** they look at it, **then** they see
+   when it last inspected the shop and when it will next do so, and can pause inspection or pause
+   the automation that wakes the PC, each with one action.
 
 ## Functional requirements
 
@@ -56,6 +66,11 @@ checking it is tedious, and a card worth buying sits unbought for eight hours.
 | RF08 | Let the player subscribe to notifications from the client. |
 | RF09 | Show the offer — cards and costs — in the notification and in the client. |
 | RF10 | Return the PC to sleep when collection finishes. |
+| RF11 | Install the collector on Windows from a single installer, with no separate runtime or manual setup required beyond it. |
+| RF12 | Keep running the collector's own schedule across reboots, with no WSL, terminal, or Claude Code session involved. |
+| RF13 | Show, in the collector's own window, when it last inspected the shop and when it will next do so. |
+| RF14 | Let the player pause and resume shop inspection from the collector's window. |
+| RF15 | Let the player pause and resume the automation that wakes the PC, independently of pausing inspection. |
 
 ## Non-functional requirements
 
@@ -64,9 +79,10 @@ checking it is tedious, and a card worth buying sits unbought for eight hours.
 | NF01 | No recurring cost. Free hosting tier; collection on the player's own PC. | Article 3. Cloud GPU instances for vision-based reading would have cost hundreds of BRL a month — the reason the JSON path was chosen. |
 | NF02 | Reading must survive game UI changes. | Article 2. The data comes from state files, not the screen. |
 | NF03 | The notification path stays up even when the PC is off. | The player's phone must not depend on their desktop being awake. |
-| NF04 | Collection runs under WSL, reading the Windows filesystem through `/mnt/`. | The development and runtime environment. |
+| NF04 | In production, the collector runs as an installed native Windows application — never from WSL, a terminal, or Claude Code. WSL is the development and experimentation environment only. | The shipped product runs unattended on the player's own PC long after this repo stops being touched; that is not the environment it was built in. |
 | NF05 | The game's files and install are never modified. | Article 4. |
 | NF06 | A failed collection run is visible after the fact without a live terminal. | Runs happen while nobody is watching; silent failure is indistinguishable from "the shop did not change". |
+| NF07 | The collector's background footprint is negligible between scheduled inspections. | Article 7's "minimal maintenance" extends to the player's machine — an always-running app has to be cheap to leave on. |
 
 ## Acceptance criteria
 
@@ -95,6 +111,17 @@ checking it is tedious, and a card worth buying sits unbought for eight hours.
   its display name — not its internal `cardDefId` — with its token cost.
 - **RF10** — Given collection has finished, when 1 minute has passed, then the PC is asleep, and this
   step can be disabled by configuration for debugging (Article 7).
+- **RF11** — Given a Windows PC with no prior Snaptritor component installed, when the installer is
+  run once and any first-run setup (e.g. pairing with the notification subscription) is completed,
+  then the collector is present and will run its next scheduled inspection unassisted.
+- **RF12** — Given the collector was installed and the PC is later rebooted, when the next scheduled
+  time arrives, then inspection runs with no WSL, terminal, or Claude Code involved.
+- **RF13** — Given the collector has run at least one inspection, when the player opens its window,
+  then it shows the timestamp of the last inspection and of the next scheduled one.
+- **RF14** — Given inspection is paused, when a scheduled time arrives, then no inspection runs and
+  the "next inspection" display reflects the pause rather than showing a time that will not happen.
+- **RF15** — Given wake automation is paused and a scheduled time arrives while the PC is asleep,
+  then the PC is not woken; resuming it restores the normal schedule without reinstalling.
 
 ## Open questions
 
@@ -105,8 +132,12 @@ checking it is tedious, and a card worth buying sits unbought for eight hours.
 | Q03 | Does the motherboard and NIC support Wake-on-LAN, and is it enabled in BIOS? (doc item T06) | RF01 | user |
 | Q04 | Can Web Push with VAPID be sent from the chosen host's runtime, which has no built-in push service? (doc item T05) | RF07 | me, at plan time |
 | Q05 | Where do card display names come from — the game's own definition data, or a maintained mapping? `data-patch.json` is the likely source but has not been confirmed to carry localised names. | RF09 | me, at plan time |
+| Q06 | Now that the collector is a native Windows app, should PC wake use the OS's own wake-capable scheduled task (the app schedules itself to be woken, no external trigger needed) instead of an externally-sent Wake-on-LAN packet (which needs something else on the LAN to send it)? The self-wake route removes an unresolved piece of the old design — nothing in the original doc ever named what would send the packet. | RF01, RF15 | me, at plan time |
 
 ## Dependencies
 
 - Feature `000` must reach a verdict before this feature's `plan.md` is written. RF02 may be reduced
   or dropped entirely depending on it.
+- Packaging and UI framework for the Windows installer (RF11–RF15) are plan-level decisions, not
+  spec-level ones — `plan.md` names the technology once written; this spec states only the
+  observable behaviour the install and the window must deliver.

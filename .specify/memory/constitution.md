@@ -44,9 +44,10 @@ requirement nobody implements — fails review.
 
 ## Article 7 — Runnable without waiting on the house
 
-The collector runs end-to-end on demand from the CLI against a fixture or the live file. Wake-on-LAN,
-the scheduler and the suspend-at-end step are outer layers that can each be switched off. Debugging
-never requires waiting eight hours for a shop rotation, and never requires the PC to be asleep first.
+The collector's core logic runs end-to-end on demand — from the CLI during development, from its
+own window once installed — against a fixture or the live file. Waking the PC, the scheduler and the
+suspend-at-end step are outer layers that can each be switched off. Debugging never requires waiting
+eight hours for a shop rotation, and never requires the PC to be asleep first.
 
 ## Article 8 — Secrets never land in the repo
 
