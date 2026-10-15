@@ -1,7 +1,7 @@
 # Spec: ShopState write trigger
 
 - **ID:** `000-shopstate-write-trigger`
-- **Status:** ready
+- **Status:** implemented — see `findings.md`. The spike concluded with a pivot (screenshot capture, no JSON extraction) rather than one of the three verdicts it anticipated.
 - **Source:** item **T02** of the shared doc, and its open thread asking whether to simulate
   in-game clicks or look for another way to force the refresh first. The answer chosen was:
   investigate first.

@@ -106,5 +106,17 @@ delayed recheck. The evidence points at one of two explanations, not yet disting
    never touch the network" premise may not hold for this specific data, and the project's
    approach needs reconsidering for the card-shop feature specifically.
 
-Both possibilities need the user's input before continuing — see the open question raised with
-them.
+Both possibilities were put to the user. **Decision (2026-10-15): pivot away from reading
+`ShopState.json`'s card-shop data entirely.** The collector will instead bring the Shop → Cards
+screen into view (confirmed necessary either way, by every path this spike tested) and capture a
+screenshot of it, forwarding that image **undecoded** — no OCR, no vision model, no attempt to
+read what the picture shows. The notification carries the screenshot itself rather than card names
+and costs. This is now constitution Article 2, revised.
+
+This closes the spike. It did not answer the question it set out to answer (A/B/C), but it
+produced a more useful one: local JSON reading of the card-shop module is not viable at all under
+normal play, so there is no point refining *when* to read a file that never reflects the live
+offer. `specs/001-shop-rotation-notifier/spec.md` has been rewritten around the screenshot
+approach; see it for RF02–RF04 and RF09's new wording. Experiment E5 (querying `shop_runtime_url`
+directly) stays unscheduled — the user chose screenshots, not the endpoint, so the ToS exposure in
+E5 was never taken on.

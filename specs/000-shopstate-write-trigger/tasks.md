@@ -108,7 +108,10 @@ No orphans: every task above serves a listed requirement.
   changed — in particular `ShopClientState.json`, `TimeModelState.json` and `CommandIndexState.json`.
 - **Verify:** `findings.md` has a table of changed files with a yes/no on rotation data, and a
   one-line conclusion on whether a cheaper signal exists.
-- **Status:** `[ ]`
+- **Status:** `[-]` dropped — a targeted search for the on-screen cards (Miek, Gamora, Silk) was
+  run as part of recording E2 and found no local mirror of the live offer anywhere in
+  `States/nvprod/`. A fuller file-by-file sweep is moot now that the project is pivoting away from
+  reading this directory for shop content at all.
 
 ### T008 — Write the verdict
 
@@ -121,7 +124,10 @@ No orphans: every task above serves a listed requirement.
   Set `spec.md` status to `implemented`. Update **T02** in the shared doc with the verdict.
 - **Verify:** `findings.md` ends with a named verdict and a stated consequence. Feature `001`'s
   `plan.md` can be written without re-opening the question.
-- **Status:** `[ ]`
+- **Status:** `[x]` — verdict was "none of A/B/C"; the user chose a pivot (screenshot capture,
+  undecoded, no JSON extraction) over further investigation of this file. Recorded in
+  `findings.md`, constitution Article 2 revised, `001`'s spec rewritten. Reply posted in the shared
+  doc's T02 thread.
 
 ### E5 — Direct shop endpoint (gated, not scheduled)
 

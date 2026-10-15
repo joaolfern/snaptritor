@@ -10,11 +10,18 @@ No source file is written for a feature that has no `spec.md`. Behaviour changes
 spec, then the plan, then the tasks, then the code. A bug fix that changes documented behaviour
 is a spec change; a bug fix that restores documented behaviour is not.
 
-## Article 2 — JSON is the only source of truth
+## Article 2 — No interpretation of pixels
 
-The shop rotation is read from the game's local state files. No screen capture, no OCR, no
-computer vision, no LLM anywhere in the data path. This was chosen deliberately over
-vision-based reading: it costs nothing to run and does not break when the game's UI changes.
+No OCR, no computer vision, no LLM anywhere in the data path — nothing may read the *meaning* of
+what is on screen. This article originally also required the shop rotation to come from the
+game's local JSON state files alone; feature `000` found that assumption false (the file does not
+reflect the live offer under any tested condition — see its `findings.md`), so the article was
+narrowed to what it was actually protecting against: a model or a vision pipeline deciding what a
+card is. A raw screenshot may still be captured and forwarded **undecoded** — nothing in the
+collector, the Worker, or the client may parse, crop-and-classify, or otherwise interpret its
+pixels; it is relayed exactly as captured, the same way an image attachment would be. This keeps
+the original intent (no recurring vision-model cost, nothing that breaks when the game's art
+changes) while allowing the one path that survived contact with the real file.
 
 ## Article 3 — Zero recurring cost
 
@@ -27,7 +34,10 @@ rejected at plan review, however small the bill.
 Game state is opened read-only and copied before parsing. The game's install directory is never
 modified, no code is injected into the game process, and no file under
 `AppData/LocalLow/Second Dinner` is created, moved or deleted. If a step appears to need a write,
-the step is wrong.
+the step is wrong. Driving the game's UI (simulated mouse or keyboard input, the same channel a
+player uses) to bring the shop into view is allowed under this article — it touches no file and
+injects no code — but reading or writing the game's process memory directly does not, and is
+never an acceptable shortcut around it.
 
 ## Article 5 — Contract first
 
