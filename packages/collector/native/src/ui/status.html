@@ -1,0 +1,103 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Snaptritor</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 1.5rem; }
+      h1 { font-size: 1.1rem; }
+      /* Generous padding, not just a tight fit around the text/checkbox: a small target is more
+         fragile to hit precisely (confirmed live — see CLAUDE.md's note on the full-window-rect
+         vs. CSS-viewport coordinate offset), and it's better UX for a real pointing device too. */
+      .row { margin: 0.5rem 0; padding: 0.5rem 0; display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+      .row input[type="checkbox"] { width: 1.5rem; height: 1.5rem; }
+      .error { color: #b00020; }
+      input[type="text"] { font-size: 1.1rem; letter-spacing: 0.15em; text-transform: uppercase; width: 8ch; }
+      #pairing-view, #status-view { display: none; }
+    </style>
+  </head>
+  <body>
+    <h1>Snaptritor</h1>
+
+    <section id="pairing-view">
+      <p>Enter the pairing code shown on your phone to finish setup.</p>
+      <form id="pairing-form">
+        <input id="pairing-code-input" type="text" maxlength="6" />
+        <button type="submit">Link</button>
+      </form>
+      <p id="pairing-error" class="error"></p>
+    </section>
+
+    <section id="status-view">
+      <p>Last inspection: <span id="last-inspection">—</span></p>
+      <p>Next inspection: <span id="next-inspection">—</span></p>
+      <div class="row">
+        <label for="inspection-paused-toggle">Pause inspection</label>
+        <input id="inspection-paused-toggle" type="checkbox" />
+      </div>
+      <div class="row">
+        <label for="wake-paused-toggle">Pause wake automation</label>
+        <input id="wake-paused-toggle" type="checkbox" />
+      </div>
+    </section>
+
+    <script>
+      function formatDate(iso) {
+        return iso ? new Date(iso).toLocaleString() : "never yet";
+      }
+
+      function showPairingView() {
+        document.getElementById("pairing-view").style.display = "block";
+        document.getElementById("status-view").style.display = "none";
+        // The HTML `autofocus` attribute doesn't reliably take effect here (confirmed live:
+        // document.activeElement stayed BODY) — focus explicitly instead.
+        document.getElementById("pairing-code-input").focus();
+      }
+
+      function showStatusView(state) {
+        document.getElementById("pairing-view").style.display = "none";
+        document.getElementById("status-view").style.display = "block";
+        document.getElementById("last-inspection").textContent = formatDate(state.lastInspectionAt);
+        document.getElementById("next-inspection").textContent = formatDate(state.nextInspectionAt);
+        document.getElementById("inspection-paused-toggle").checked = state.inspectionPaused;
+        document.getElementById("wake-paused-toggle").checked = state.wakeAutomationPaused;
+      }
+
+      function render(state) {
+        if (!state.collectorSecret) {
+          showPairingView();
+        } else {
+          showStatusView(state);
+        }
+      }
+
+      async function init() {
+        const state = await window.snaptritor.getState();
+        render(state);
+
+        document.getElementById("pairing-form").addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const code = document.getElementById("pairing-code-input").value.trim().toUpperCase();
+          const errorEl = document.getElementById("pairing-error");
+          errorEl.textContent = "";
+          try {
+            const newState = await window.snaptritor.claimPairingCode(code);
+            render(newState);
+          } catch (err) {
+            errorEl.textContent = err instanceof Error ? err.message : "Could not link";
+          }
+        });
+
+        document.getElementById("inspection-paused-toggle").addEventListener("change", async (event) => {
+          await window.snaptritor.setInspectionPaused(event.target.checked);
+        });
+
+        document.getElementById("wake-paused-toggle").addEventListener("change", async (event) => {
+          await window.snaptritor.setWakePaused(event.target.checked);
+        });
+      }
+
+      init().catch((err) => console.error("init() failed:", err instanceof Error ? err.message : err));
+    </script>
+  </body>
+</html>

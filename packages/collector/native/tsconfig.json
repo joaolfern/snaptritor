@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "noEmitOnError": false,
+    "types": ["node"]
+  },
+  "include": ["src/ui/main.ts", "src/ui/preload.cts"]
+}

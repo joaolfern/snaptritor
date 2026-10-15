@@ -120,6 +120,13 @@ not just write it — useful, with real limits worth knowing before re-discoveri
   over the same UNC path work fine. The fix: `npm install` into a real local Windows path (e.g.
   `C:\Users\<user>\<scratch-dir>`), then `robocopy` the resulting `node_modules` onto the repo's
   UNC path — a plain file copy isn't affected by the cmd.exe/UNC limitation, only build scripts are.
+  **`npm run <script>` hits this exact same wall for the same reason** (npm always shells a
+  package.json script out through its own `cmd.exe`, not just install hooks) — confirmed live:
+  `npm run build:ui` over the `New-PSDrive` bridge failed with "Não há suporte para caminhos UNC",
+  while running the script's own two commands directly via `powershell.exe -Command "node ..."`
+  (no `npm run` in between) succeeded immediately. The `package.json` scripts are still correct and
+  useful for a real local-path install (where this never comes up) — only invoking them *through
+  this WSL/UNC interop bridge specifically* needs the direct-command workaround.
 - **A native module's `node_modules` must be an ancestor of whatever imports it.** Node's ESM
   resolution walks up parent directories only — a sibling folder's `node_modules` is invisible.
   This is why Windows-native automation code lives under `packages/collector/native/` as a
@@ -169,6 +176,63 @@ not just write it — useful, with real limits worth knowing before re-discoveri
     transient "could not resolve" errors as it rebuilds against a half-copied tree — check the
     final state (a plain request against the dev server) before concluding something is actually
     broken.
+- **A `.cmd`/`.bat` wrapper script breaks `New-PSDrive`'s mapped drive, even though plain `node.exe`
+  doesn't.** `New-PSDrive -Scope Global` (used to work around PowerShell's `Set-Location` not
+  accepting a raw UNC path) is a **PowerShell-session-local virtual drive** — invisible to any
+  child *process* PowerShell spawns, which only affects PowerShell's own provider-level cmdlets.
+  Running a plain executable from inside the mapped directory works fine (the resolved path is
+  handed to the child process directly). But `electron.cmd` (npm's generated Windows shim, same
+  pattern as `schtasks`'s batch wrappers) internally spawns its *own* `cmd.exe`, and that fresh
+  process doesn't know about the S: drive at all — it falls back to the real OS-level working
+  directory, hits the UNC path, and fails with the exact same "UNC paths not supported" error all
+  over again, despite `(Get-Location).Path` printing the correct mapped path right before it.
+  **Fix: call the real binary directly** (`node_modules\electron\dist\electron.exe`, not
+  `node_modules\.bin\electron.cmd`), bypassing the wrapper layer entirely.
+- **Electron's GPU process fails to launch on this machine** (`GPU process launch failed:
+  error_code=18`, fatal) with default settings. Needed two command-line switches, set via
+  `app.commandLine.appendSwitch(...)` *before* `app.whenReady()`: `disable-gpu` and `no-sandbox`.
+  `no-sandbox` disables Chromium's process sandboxing — a real security trade-off in general, but a
+  low-risk one here specifically: this app only ever renders its own local HTML, never third-party
+  or remote content. Likely a driver/security-software interaction specific to this machine, not an
+  Electron bug — but since the collector only ever runs on this exact machine, these flags are
+  simply required, not optional-for-cleaner-setups.
+- **A second, independent rendering problem looks identical to the GPU crash but isn't: a
+  perfectly healthy window stays permanently blank (chrome visible, content area white, no error
+  logged anywhere).** This is a *separate* bug from the fatal GPU crash above and needs a different
+  fix — more GPU flags do nothing for it. Root cause: Electron's default `show: true` paints the
+  window with its native blank backing color before the first real frame composites; on this
+  machine's constrained rendering path, no later repaint ever actually gets presented, so it just
+  stays blank forever even though the renderer process is alive and the DOM is correct (confirmed
+  by forwarding `console-message` events into the main process's log — the page's own JS was
+  running fine). Fix: construct `BrowserWindow` with `show: false`, then
+  `win.once("ready-to-show", () => { win.show(); win.focus(); })`. Ruled out "Electron just can't
+  render on this machine at all" by comparing against VS Code (also Electron-based), which rendered
+  normally side-by-side in the same screenshot.
+- **Showing a window does not give it OS-level keyboard focus, even combined with the fix above.**
+  `win.focus()` right after `win.show()` is still necessary — without it, `document.activeElement`
+  stays `BODY` and typed keystrokes go nowhere.
+- **A preload script written as plain `.ts`/`.js` fails with `SyntaxError: Cannot use import
+  statement outside a module`, even though the rest of the package has `"type": "module"` in its
+  `package.json`.** Electron's preload loader does not execute ESM, full stop — the root
+  `package.json`'s module type is irrelevant to it. Fix: name the source file `preload.cts`
+  (TypeScript's dedicated "always compile as CommonJS regardless of surrounding config" extension)
+  so `tsc` emits `preload.cjs`, and point `webPreferences.preload` at the `.cjs` output.
+- **The HTML `autofocus` attribute does not reliably take effect in this renderer context**
+  (confirmed live: `document.activeElement` stayed `BODY` with it present). Don't rely on it for an
+  input that needs to receive typed input immediately on view-switch — call `.focus()` on the
+  element explicitly from JS instead (e.g. right when a view becomes visible).
+- **Simulated clicks (`nut-js`) landed on the wrong element despite correct-looking coordinate math
+  — not a DPI issue (`window.devicePixelRatio` was confirmed `1`).** The actual cause: a constant
+  **31px offset** between the two coordinate systems in play. `nut-js`'s capture/click APIs work in
+  physical pixels relative to the *full window rect* (title bar included); Chromium's own
+  `getBoundingClientRect()` reports CSS pixels relative to the *content viewport* (title bar
+  excluded). Clicking at a raw `rect.x / rect.y` against the full window rect was consistently
+  31px low. Fix/methodology: forward `console-message` to the main process, `console.log` the
+  target element's `getBoundingClientRect()` from the renderer, and compute the physical click
+  target as `(cssX) / window.width, (cssY + 31) / window.height` (31 ≈ this machine's title-bar
+  height; re-measure rather than assume the constant carries to a different window chrome/DPI).
+  This technique — log the CSS rect, add the chrome offset, then click — is the reusable fix for
+  any future precise click-targeting inside an Electron/Chromium window from outside the process.
 
 ## Conventions
 

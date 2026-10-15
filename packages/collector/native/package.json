@@ -3,9 +3,17 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Windows-only native automation (window-finding, screen capture, simulated input). Installed and run exclusively via Windows' own npm/node (over the repo's UNC path), never via WSL's pnpm -- see CLAUDE.md. Deliberately NOT a pnpm-workspace member: packages/collector/native is nested a level deeper than pnpm-workspace.yaml's 'packages/*' glob matches, so a WSL-side pnpm install never touches it and can't overwrite its Windows-compiled native bindings with Linux ones.",
+  "description": "Windows-only native automation (window-finding, screen capture, simulated input) and the Electron status window. Installed and run exclusively via Windows' own npm/node (over the repo's UNC path), never via WSL's pnpm -- see CLAUDE.md. Deliberately NOT a pnpm-workspace member: packages/collector/native is nested a level deeper than pnpm-workspace.yaml's 'packages/*' glob matches, so a WSL-side pnpm install never touches it and can't overwrite its Windows-compiled native bindings with Linux ones.",
   "dependencies": {
     "@nut-tree-fork/nut-js": "^4.2.6",
-    "node-window-manager": "^2.2.4"
+    "electron": "^33.2.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "@types/node": "^22.9.0"
+  },
+  "scripts": {
+    "build:ui": "node node_modules/typescript/bin/tsc -p tsconfig.json && node -e \"require('fs').copyFileSync('src/ui/status.html', 'dist/status.html')\"",
+    "start:ui": "node node_modules/electron/dist/electron.exe dist/main.js"
   }
 }

@@ -367,8 +367,10 @@ No orphans: every task below cites at least one requirement it serves.
 ### T012 — `packages/collector`: status window + first-run pairing prompt
 
 - **Serves:** RF13, RF14, RF15, RF18
-- **Files:** `packages/collector/src/ui/status.html`, `packages/collector/src/ui/main.ts`,
-  `packages/collector/src/cli.ts` (default entry added)
+- **Files:** `packages/collector/native/src/ui/status.html`,
+  `packages/collector/native/src/ui/main.ts`, `packages/collector/native/src/ui/preload.cts`,
+  `packages/collector/native/tsconfig.json`, `packages/collector/native/package.json` (build/start
+  scripts added)
 - **Do:** An Electron `BrowserWindow` (no Chromium devtools shown) that reads `CollectorState` (T002)
   on open and renders last/next inspection time plus two toggle switches: one flips
   `inspectionPaused` and writes state back (T002's `writeState`); the other calls T011's
@@ -386,7 +388,30 @@ No orphans: every task below cites at least one requirement it serves.
   inspection-pause toggle updates `state.json`'s `inspectionPaused` on disk (confirmed by reading
   the file after); clicking the wake-pause toggle changes the registered task's enabled state
   (confirmed by `schtasks /query`).
-- **Status:** `[ ]`
+- **Status:** `[x]` — built in `packages/collector/native/` (not `packages/collector/src/`, matching
+  the established native/ convention from T007–T011) as a self-contained window: Electron 33 bundles
+  Node 20.18 (confirmed live), which has no native TS support, so importing T002's `state.ts` or
+  T011's `scheduler.ts` directly would cross a `tsc` rootDir boundary this package can't cross either
+  — the window instead duplicates the small slice of state-read/write and
+  Enable/Disable-ScheduledTask logic it needs, documented at the top of `main.ts` as a deliberate
+  trade-off. Verified end-to-end for real, twice (once with diagnostics, once clean after removing
+  them): with no stored secret, launching shows the pairing prompt; a real code from a live
+  `wrangler dev`'s `POST /pairing/code`, typed and submitted with Enter, stores the returned
+  `collectorSecret` in `state.json` and switches to the status view (confirmed both via the on-disk
+  file and via the Worker's `GET /collector/status` returning `linked: true`); both toggles confirmed
+  writing `inspectionPaused`/`wakeAutomationPaused` to `state.json` from precisely-targeted clicks.
+  Five real bugs found and fixed along the way (all added to CLAUDE.md so they aren't
+  re-discovered): `electron.cmd`'s wrapper spawns its own `cmd.exe`, which is blind to
+  `New-PSDrive`'s session-local mapping — call `electron.exe` directly; the GPU process crashes
+  fatally with default flags (`disable-gpu` + `no-sandbox` fixes it); a second, separate bug left the
+  window permanently blank even with GPU flags fixed and the DOM proven correct via forwarded
+  console logs — root cause was Electron's default `show:true` painting a blank frame before the
+  real one could composite, fixed with `show:false` + `ready-to-show`; the preload script failed
+  with an ESM `SyntaxError` despite the package being `"type":"module"` — Electron's preload loader
+  never runs ESM, fixed by naming it `preload.cts` so `tsc` emits CommonJS `.cjs`; and precise clicks
+  landed 31px off their intended target — not a DPI issue (`devicePixelRatio` was `1`) but a
+  `nut-js`-physical-pixels-include-title-bar vs. `getBoundingClientRect()`-CSS-pixels-exclude-it
+  mismatch, found by forwarding `console-message` to log the real target rect.
 
 ### T013 — `packages/collector`: Windows installer
 
