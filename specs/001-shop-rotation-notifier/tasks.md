@@ -204,19 +204,24 @@ No orphans: every task below cites at least one requirement it serves.
 ### T008 — `packages/collector`: Windows simulated-click module
 
 - **Serves:** RF02, NF05
-- **Files:** `packages/collector/src/windows/click.ts`,
-  `packages/collector/scripts/smoke-click.ts` (new)
-- **Do:** `clickProportional(rect, xFraction, yFraction)` (via `@nut-tree/nut-js`'s `mouse`) moves
-  to and clicks a point computed as a fraction of the given window rect — never an absolute screen
-  coordinate, so it keeps working if the window moves (plan.md's design). `smoke-click.ts` opens
-  (or expects open) a benign target window, e.g. Notepad, and clicks a known menu location as a
-  generic proof the input simulation reaches a real window — no game involved yet.
+- **Files:** `packages/collector/native/src/windows/click.ts`,
+  `packages/collector/native/scripts/smoke-click.ts` (new — under `native/`, same relocation
+  reason as T007)
+- **Do:** `clickProportional(rect, xFraction, yFraction)` (via `@nut-tree-fork/nut-js`'s `mouse`)
+  moves to and clicks a point computed as a fraction of the given window rect — never an absolute
+  screen coordinate, so it keeps working if the window moves (plan.md's design). `smoke-click.ts`
+  focuses Notepad, clicks its "File" menu, captures the result (reusing T007's `capture`), and
+  saves it so the outcome can actually be looked at — no game involved yet.
 - **Verify:** Same interop pattern as T007:
-  `powershell.exe -Command "node \\wsl.localhost\...\smoke-click.ts"` with Notepad open — the
-  click visibly lands (e.g. opens Notepad's File menu) and the script prints success. This is a
-  manual-eyes-on check since "a menu opened" has no clean stdout signal; note in the run log what
-  was observed.
-- **Status:** `[ ]`
+  `powershell.exe -Command "node \\wsl.localhost\...\smoke-click.ts"` with Notepad open — then
+  **read the saved screenshot as an image** and confirm the File menu is visibly open (T007's
+  lesson: a clean exit code alone proves nothing about where the click landed).
+- **Status:** `[x]` — ran for real; `Point`/`Region`/`Button`/`mouse`/`straightTo` all matched
+  their published docs exactly this time (checked against the installed `.d.ts` files before
+  writing any code, not assumed from T007's experience that they'd be wrong too). Read the saved
+  `smoke-click-output.png` as an image: Notepad's full File menu (New tab, Save, Print, Exit, …)
+  is visibly open, confirming the click landed exactly on the menu button. Closed the menu
+  afterward (`{ESC}` via `SendKeys`) to leave Notepad in a clean state.
 
 ### T009 — Checkpoint: tune real navigation against the game
 
