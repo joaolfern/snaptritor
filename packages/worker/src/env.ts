@@ -3,4 +3,7 @@ export interface Env {
   SUBSCRIPTIONS: KVNamespace;
   SHOP_IMAGES: R2Bucket;
   COLLECTOR_SECRET: string;
+  VAPID_PUBLIC_KEY: string;
+  VAPID_PRIVATE_KEY: string;
+  VAPID_SUBJECT: string;
 }

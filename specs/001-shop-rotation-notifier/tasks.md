@@ -104,7 +104,11 @@ No orphans: every task below cites at least one requirement it serves.
   NF08 says the push payload carries.
 - **Verify:** `pnpm --filter worker test` — a correctly authed, valid submission returns `201` with
   a URL; a bad secret returns `401` and nothing is stored; an invalid body returns `400`.
-- **Status:** `[ ]`
+- **Status:** `[x]` — 6/6 tests in `inspections.test.ts` pass (part of the 17/17 full-suite run
+  below). Also added `handleGetImage` (`GET /images/:key`, streams from R2) since the "public
+  URL" NF08 needs had no natural source without it — R2's own dev-domain public access is a T016
+  deployment decision, so the Worker serves its own images instead, keeping this task testable
+  with zero Cloudflare account dependency.
 
 ### T005 — `packages/worker`: VAPID Web Push fanout `[parallel-safe with T004, T006]`
 
@@ -121,7 +125,15 @@ No orphans: every task below cites at least one requirement it serves.
   mocked push-service response of `410` is asserted to trigger a KV delete for that subscription.
   Actually receiving a push on a real device is **not** verified here — that needs a deployed
   Worker and a real subscription (T016).
-- **Status:** `[ ]`
+- **Status:** `[x]` — 5/5 tests pass, run against the real workerd runtime (not mocked crypto),
+  including a full `encryptPushPayload` call exercising real ECDH + HKDF + AES-128-GCM. One
+  runtime surprise: `@cloudflare/workers-types` names the ECDH `deriveBits` public-key field
+  `$public`, but the actual workerd runtime only accepts the spec's real key, `public` — satisfying
+  the type checker literally would have sent the wrong field name and failed at runtime
+  ("Missing field \"public\" in \"derivedKeyParams\""), caught only because this test runs against
+  the real runtime rather than a type-level or mocked check. Worked around with a narrow
+  `as unknown as` cast, commented in `push.ts`. As the task itself anticipated: real interop with
+  an actual push service (FCM/Mozilla's) is still unverified — only T016/T017 prove that.
 
 ### T006 — `packages/worker`: `GET /inspections/latest` `[parallel-safe with T004, T005]`
 
@@ -132,7 +144,8 @@ No orphans: every task below cites at least one requirement it serves.
   inspection stored yet) returns `404`, not a crash.
 - **Verify:** `pnpm --filter worker test` — after T004's store, a `GET /inspections/latest` returns
   that same metadata and URL; with nothing stored, it returns `404`.
-- **Status:** `[ ]`
+- **Status:** `[x]` — 2/2 tests pass. Full worker suite: `pnpm --filter @snaptritor/worker test` →
+  17/17 passed across all four test files; `typecheck` clean.
 
 ### T007 — `packages/collector`: Windows window-finder and screenshot capture
 
