@@ -226,8 +226,7 @@ No orphans: every task below cites at least one requirement it serves.
 ### T009 — Checkpoint: tune real navigation against the game
 
 - **Serves:** RF02
-- **Files:** none yet — this produces the concrete constants T010 needs
-  (`packages/collector/src/navigation.ts`'s click sequence and landmark region)
+- **Files:** `packages/collector/native/src/navigation.ts` (new)
 - **Do:** Ask the user to launch Marvel Snap on the PC and leave it at the main menu. Using T007's
   capture script and T008's click module interactively (a short throwaway script, run step by step),
   find: the click sequence from main menu to Shop → Cards as fractions of the window rect, and a
@@ -236,7 +235,32 @@ No orphans: every task below cites at least one requirement it serves.
 - **Verify:** The user confirms the recorded click sequence actually lands on Shop → Cards when
   re-run from the main menu, and that the chosen landmark region visibly changes between the
   loading and loaded states (shown by capturing both and comparing by eye).
-- **Status:** `[ ]`
+- **Status:** `[x]` — the user gave the exact navigation path up front with reference screenshots
+  (main menu → Shop → Cards tab → Daily Cards sub-tab), which turned out to be exactly the live
+  rotation view (matching the earlier-described on-screen cards). Rather than trust pixel
+  positions read off those reference images (different, possibly cropped dimensions), drove the
+  **real, running game** with T007/T008's tools and verified every step by reading my own
+  screenshots:
+  - Clicking Shop alone landed directly on Daily Cards — but only because the game remembered its
+    last-viewed shop tab from the user's own earlier session. Not safe to rely on after a fresh
+    launch (RF02's actual scenario), so explicitly verified the fuller path: clicked **away** to
+    the Offers tab (confirmed via screenshot — real money bundles, not Daily Cards), then back to
+    the Cards tab, then the Daily Cards sub-icon, confirming each click target independently
+    rather than accepting one lucky run.
+  - Found a real window-matching hazard: `getWindows()` lists a window literally titled `"SNAP"`
+    for the game, but a case-insensitive "snap" search also matches this repo's own VS Code window
+    (title contains "snaptritor"). `findWindow()`'s default substring match is case-sensitive, so
+    `findWindow("SNAP")` already avoids this correctly — documented as `GAME_WINDOW_TITLE` with an
+    explicit warning rather than left to be rediscovered.
+  - Recorded the three-step click sequence and the Daily Cards region as constants in
+    `navigation.ts`, all as window-rect fractions (not absolute coordinates), with the real
+    (1920×1080) resolution they were verified at noted for future re-verification if that changes.
+  - Landmark/"settled" detection: no loading spinner was ever observed (the shop opened instantly
+    in every run), so there was no "loading vs. loaded" pair of states to capture and diff as the
+    task originally envisioned. Documented in `navigation.ts`'s own comments as a residual gap for
+    T010: poll by comparing two consecutive captures' hashes for stability (unchanged = settled)
+    rather than comparing against a known loading frame that was never actually observed.
+  - Left the game in a clean state afterward (closed the shop panel).
 
 ### T010 — `packages/collector`: wire `--inspect` end to end
 
