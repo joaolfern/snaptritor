@@ -79,7 +79,8 @@ No orphans: every task above serves a listed requirement.
 - **Files:** none
 - **Do:** Ask the user to launch the game, go to Shop → Cards, let it load, then quit cleanly.
 - **Verify:** The user confirms, with the approximate time the Shop screen finished loading.
-- **Status:** `[ ]`
+- **Status:** `[x]` — user confirmed: loaded normally, logged into the normal online account,
+  on-screen cards (Karen Page, Miek, Gamora variant, Silk variant) captured for comparison.
 
 ### T006 — Observe during and after the shop-opened session
 
@@ -91,7 +92,12 @@ No orphans: every task above serves a listed requirement.
   after the quit.
 - **Verify:** `findings.md` names the first changed snapshot and the elapsed seconds from launch, or
   states that the only change appeared in `e2-shop-final` (write-on-quit — settles Q02).
-- **Status:** `[ ]`
+- **Status:** `[x]` — modified: a single post-quit snapshot plus a delayed recheck were sufficient,
+  since both show **zero change** to `ShopState.json` at all — there is no write to time. The
+  on-screen shop (Karen Page, Miek, Gamora variant, Silk variant) does not match the file's stale
+  content (Punisher War Machine, Karen Page, Web Sling, Elsa Bloodstone variant, Jeff the Baby
+  Land Shark variant), so Q02 is moot: there is no observed write-on-quit to date either. See
+  `findings.md`.
 
 ### T007 — Look for a cheaper signal
 
