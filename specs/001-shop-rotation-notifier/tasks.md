@@ -724,3 +724,17 @@ No orphans: every task below cites at least one requirement it serves.
     (`snaptritor-worker.example.workers.dev`), so an already-installed collector's pairing claim
     and its own Scheduled Task registration both silently pointed at a URL that was never real.
     Both fixed and redeployed; see their own commits.
+  - **Custom app icon added in the same pass (v0.2.0 release), not separately spec'd — a direct
+    user request, not an RF.** Sourced from Jubilee's base card art (marvelsnapzone.com, found via
+    web search), cropped to a tight head/face portrait at
+    `packages/collector/native/resources/{icon.ico,icon.png}`. The first crop attempt (full head +
+    shoulders + the card's sparkly background) looked fine at full size but was illegible at
+    16×16/32×32 — confirmed by actually rendering a small-size preview, not just eyeballing the
+    source at full resolution — so it was re-cropped tighter around just the face before
+    finalizing. Wired into `electron-builder.yml` (`icon`/`win.icon`, packaged installer + taskbar
+    icon) and `main.ts` (`BrowserWindow`'s own runtime icon, separate from the packaged `.exe`'s).
+    Verified for real by extracting the icon back out of the actual built `.exe`
+    (`System.Drawing.Icon.ExtractAssociatedIcon`), not just trusting that the build didn't warn.
+    Flagged plainly to the user: this card art is Marvel/Second Dinner's copyrighted work, now
+    committed directly into a **public** repo (not just baked into a binary) — the user chose to
+    leave it as-is, low practical risk for a non-commercial personal fan project.

@@ -1,6 +1,6 @@
 {
   "name": "snaptritor-collector-native",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "main": "dist/main.js",
@@ -17,7 +17,7 @@
     "electron-builder": "^24.13.3"
   },
   "scripts": {
-    "build:ui": "node node_modules/typescript/bin/tsc -p tsconfig.json && node -e \"require('fs').copyFileSync('src/ui/status.html', 'dist/status.html')\"",
+    "build:ui": "node node_modules/typescript/bin/tsc -p tsconfig.json && node -e \"require('fs').copyFileSync('src/ui/status.html', 'dist/status.html'); require('fs').copyFileSync('resources/icon.png', 'dist/icon.png')\"",
     "start:ui": "node node_modules/electron/dist/electron.exe dist/main.js",
     "fetch-portable-node": "node scripts/fetch-portable-node.mjs",
     "build:installer": "npm run build:ui && npm run fetch-portable-node && node node_modules/electron-builder/out/cli/cli.js build --win nsis"

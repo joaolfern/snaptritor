@@ -5,6 +5,11 @@
 appId: com.nosnocabo.snaptritor
 productName: Snaptritor
 asar: false
+# Jubilee card art (marvelsnapzone.com), cropped to a tight head/face portrait and re-rendered at
+# icon sizes -- the full card's busy sparkle background read as noise at 16x16/32x32 (taskbar
+# size), confirmed by actually rendering a preview at that size, not just eyeballing it at full
+# resolution. win.icon below is what electron-builder actually packages into the .exe.
+icon: resources/icon.ico
 directories:
   # A real local Windows path, not the repo's own UNC-mounted location: 7-Zip's directory scan
   # during NSIS packaging reported a false "duplicate filename on disk" for mime@2.x's genuinely
@@ -15,6 +20,7 @@ files:
   - dist/main.js
   - dist/preload.cjs
   - dist/status.html
+  - dist/icon.png
   - package.json
 extraResources:
   # The Electron UI (above) and the headless --inspect task (below) are packaged side by side but
@@ -47,6 +53,7 @@ extraResources:
     to: packages/shared/node_modules/zod
 win:
   target: nsis
+  icon: resources/icon.ico
 nsis:
   oneClick: true
   perMachine: false

@@ -122,6 +122,10 @@ app.whenReady().then(() => {
     height: 320,
     show: false,
     backgroundColor: "#ffffff",
+    // Windows picks up the packaged .exe's own icon (electron-builder.yml's win.icon) for the
+    // taskbar/shortcut by default; this is the separate, explicit runtime window/taskbar icon —
+    // without it the window falls back to Electron's generic default while actually running.
+    icon: join(import.meta.dirname, "icon.png"),
     webPreferences: {
       // .cjs, not .js: Electron's preload loader doesn't execute ESM even with
       // package.json's "type":"module" — .cts source (forces CommonJS) -> .cjs output fixes it.
