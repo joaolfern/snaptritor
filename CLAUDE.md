@@ -34,41 +34,32 @@ implementation, the spec gets corrected in the same pass.
 - Game files are read-only to us (Article 4): copy, then parse the copy.
 - Raw state snapshots are personal data and are git-ignored. Keep them out of commits and the doc.
 
-### Where the shop rotation lives
+### `ShopState.json` does NOT reflect the live shop — do not read it for card data
 
-`SNAP/Standalone/States/nvprod/ShopState.json` (~240 KB):
+`SNAP/Standalone/States/nvprod/ShopState.json` (~240 KB) looks exactly like what you'd want: a
+`ServerState.CardShopModules[]` tree with each item's `RewardData.Card.CardDefId`, `CurrencyCost`,
+`Purchased`, `NextRefresh`, etc. **It is stale and stays stale.** Feature `000`'s spike (full
+account in `specs/000-shopstate-write-trigger/findings.md`) tested every path a normal player would
+take — launching to the menu, launching and opening Shop → Cards, waiting minutes afterward — and
+none of them touched this file. A session where the on-screen shop clearly showed different cards
+(confirmed by the user) still left the file byte-for-byte identical to a five-month-old baseline.
+No other file under `States/nvprod/` was found holding the live offer either.
 
-- `ServerState.CardShopModules[]` — 5 modules. The card rotation is `MyCardsShopModule`; each module
-  carries `CardShopDefConstants.RefreshIntervalHours: 8` and `NextRefresh`.
-- `…CardShopModules[].Items[]` — per item: `DefId`, `ItemType` (`PreRolledSingleCard` | `SeriesPack` |
-  `CurrencyPack`), `RewardData.Card.CardDefId` (e.g. `"KarenPage"`), optional
-  `RewardData.Card.ArtVariantDefId`, `CurrencyTypeId` (`CollectorsTokens`), `CurrencyCost` (e.g. `6000`),
-  `Purchased`, `NextRefresh`, `IsFreezable`.
-- `ServerState.CardShopModuleLog.OfferedCardDefIds[]` — the current offered set, as
-  `{Item1: cardDefId, Item2?: artVariantDefId}` tuples, with `TimeUpdated`. It spans modules, so it
-  is not identical to any single module's items.
+**Decision: the project does not read any local file for shop content.** The collector brings
+Shop → Cards into view (by driving the game's UI — RF02) and captures a screenshot of it (RF03),
+forwarded undecoded (constitution Article 2, revised). There is no JSON parsing step for the shop
+left to design. If a future session is tempted to go back to `CardShopModules` because the schema
+looks so convenient — don't; that convenience is exactly what made this take a full spike to rule
+out.
 
-Two parsing traps, both confirmed on the live file:
+The two files below are superseded by that decision but kept here for context, since the shared
+doc and early commits still reference them:
 
-- An item that has already been **purchased** drops its `RewardData` entirely — read
-  `RewardData?.Card?.CardDefId` defensively, and treat a purchased item as "no card on offer"
-  rather than a parse failure.
-- `MyCardsShopModule` also carries `SpotlightVariantCardShopItem`, so its item list is 5 long and
-  mixes plain cards with art variants. Keyed diffs must include `ArtVariantDefId`.
-
-Related files worth knowing:
-
-- `SNAP/nvprod/data-patch.json` (~1.3 MB) — card definitions; the likely source of display names.
-- `SNAP/nvprod/service-discovery.json` — `EnvironmentAttributes.shop_runtime_url`. Unofficial API
-  territory; see `specs/000-shopstate-write-trigger/spec.md` before going near it.
-- `ShopClientState.json` — client-side "seen" lists only. Not the rotation.
-
-### The open risk
-
-`ShopState.json` appears to be rewritten only when the Shop screen is actually opened in-game
-(it was last written months before the most recent play session, while every other state file was
-current). Feature `000-shopstate-write-trigger` exists to settle this; the collector's design
-depends on the answer, so do not design around a guess.
+- `SNAP/nvprod/data-patch.json` (~1.3 MB) — card definitions; would have been the source of display
+  names under the old JSON-reading design. Not needed now that RF09 shows the raw screenshot.
+- `SNAP/nvprod/service-discovery.json` — `EnvironmentAttributes.shop_runtime_url`. The one path
+  this spike did *not* test (querying it directly) — unofficial-API territory on the user's own
+  account, never pursued because screenshots solved the problem first.
 
 ## Delivery: the collector ships as an installed Windows app, not a WSL script
 
