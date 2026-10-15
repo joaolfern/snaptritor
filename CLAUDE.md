@@ -175,7 +175,13 @@ not just write it — useful, with real limits worth knowing before re-discoveri
     this. Mid-copy, a running `wrangler dev` process watching the filesystem can log a few
     transient "could not resolve" errors as it rebuilds against a half-copied tree — check the
     final state (a plain request against the dev server) before concluding something is actually
-    broken.
+    broken. **`robocopy` itself doesn't honor a `New-PSDrive`-mapped letter as a destination
+    either** — same family of bug as the `.cmd`-wrapper issue below (yet another process that
+    doesn't see the calling PowerShell session's virtual drive), confirmed live: copying onto
+    `S:\...\node_modules\zod` failed ("O sistema não pode encontrar o caminho especificado") even
+    though `New-Item -ItemType Directory` at that exact `S:\` path succeeded moments earlier. Fix:
+    give `robocopy` the raw UNC destination (`\\wsl.localhost\Ubuntu\...`) directly, never the
+    mapped drive letter.
 - **A `.cmd`/`.bat` wrapper script breaks `New-PSDrive`'s mapped drive, even though plain `node.exe`
   doesn't.** `New-PSDrive -Scope Global` (used to work around PowerShell's `Set-Location` not
   accepting a raw UNC path) is a **PowerShell-session-local virtual drive** — invisible to any

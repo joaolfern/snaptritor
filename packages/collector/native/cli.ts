@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Real entry point: `--inspect` is what the wake-capable Scheduled Task (T011) runs headlessly.
-// No GUI entry point yet (T012).
 
 import { runInspection } from "./src/inspect.ts";
+import { readState } from "../src/state.ts";
 
 function flagValue(name: string): string | undefined {
   const index = process.argv.indexOf(`--${name}`);
@@ -21,7 +21,21 @@ if (!hasFlag("inspect")) {
 
 const workerUrl = flagValue("worker-url") ?? "https://snaptritor-worker.example.workers.dev";
 const statePath = flagValue("state-path") ?? "./snaptritor-state.json";
-const collectorSecret = process.env.SNAPTRITOR_COLLECTOR_SECRET ?? "dev-test-secret-change-me";
+
+// The real per-install secret lives in state.json, written there by T012's status window once
+// the player claims a pairing code (RF18) — it is not known at install time, so the Scheduled
+// Task's action can never bake it in as a literal argument. The env var remains only as a
+// dev-time convenience for exercising --inspect against a state file that was never paired (e.g.
+// a fresh fixture during local testing).
+const collectorSecret = (await readState(statePath)).collectorSecret ?? process.env.SNAPTRITOR_COLLECTOR_SECRET;
+
+if (!collectorSecret) {
+  console.error(
+    "No collector secret found in state — this install hasn't been paired yet. " +
+      "Open the status window and enter the pairing code shown on your phone.",
+  );
+  process.exit(1);
+}
 
 try {
   await runInspection({

@@ -80,6 +80,24 @@ Installer (electron-builder → NSIS .exe)                                    RF
                           pairing code (RF18), prompted on first run — not asked of the player at
                           any other point.
 
+                          The headless `--inspect` run and the Electron status window need
+                          different Node runtimes, and the installer has to ship both without
+                          relying on anything already on the target machine (constitution art. 7 —
+                          runnable, and this specifically means runnable on a clean player's PC,
+                          not just this dev machine). `@nut-tree-fork/nut-js`'s native bindings
+                          here were built and verified (T007–T011) against the system Node 25
+                          install's ABI, not Electron 33's bundled Node 20.18 — running them under
+                          `ELECTRON_RUN_AS_NODE=1` instead would need `electron-rebuild`-ing nut-js
+                          against Electron's own ABI, an extra moving part for no real benefit.
+                          Simpler: `electron-builder`'s `extraResources` bundles a portable Node
+                          runtime (a zipped `node.exe` for the target architecture, fetched at
+                          build time, not installed system-wide) alongside the compiled collector
+                          JS, and the installer's post-install step registers the Scheduled Task's
+                          action against that bundled `node.exe` + bundled `cli.js` — never the
+                          dev machine's own system Node, never Electron's. The Electron app itself
+                          (bundling its own separate Node 20.18) stays solely responsible for the
+                          status window.
+
 packages/worker           Cloudflare Worker, TypeScript.                RF06, RF07, RF16–RF18
   POST /inspections        authed by a per-install secret issued at pairing (see RF18 below, not
                             a single global baked-in secret — see Rejected alternatives); validates
@@ -219,3 +237,10 @@ is stored — the collector's own `--inspect` logs that rejection into `Collecto
 - **Tying the link to the subscription via a token baked into the download URL itself**, with no
   separate code step. Removes the typing, but then the download link *is* the credential — exactly
   the leak the user was guarding against by asking for a pairing code in the first place.
+- **Running the headless `--inspect` task via `ELECTRON_RUN_AS_NODE=1` against the installed
+  Electron binary**, instead of bundling a separate portable Node runtime. Would avoid shipping
+  two Node runtimes in one installer, but `@nut-tree-fork/nut-js`'s native bindings are built
+  against system Node 25's ABI; Electron 33 bundles Node 20.18, a different ABI, so this path
+  needs `electron-rebuild`-ing nut-js specifically for Electron on every dependency bump — an
+  ongoing maintenance cost for a one-time disk-size saving. A bundled portable `node.exe` sidesteps
+  the ABI question entirely.
