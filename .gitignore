@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+build/
+*.tsbuildinfo
+
+# cloudflare
+.wrangler/
+.dev.vars
+
+# secrets & local config
+.env
+.env.*
+!.env.example
+*.local.json
+
+# spike artifacts: raw game-state snapshots are large and personal
+specs/**/snapshots/
+*.snapshot.json
+
+# os / editor
+.DS_Store
+Thumbs.db
