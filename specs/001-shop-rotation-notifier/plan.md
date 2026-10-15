@@ -1,7 +1,7 @@
 # Plan: Shop rotation notifier
 
 - **Spec:** `./spec.md` (status: ready)
-- **Status:** draft
+- **Status:** approved — tasks.md written from it
 
 ## Chosen approach
 
