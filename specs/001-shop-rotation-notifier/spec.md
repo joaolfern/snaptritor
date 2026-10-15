@@ -72,7 +72,7 @@ only the screen itself, once the shop is on it.
 | RF07 | Send a push notification to every subscribed device when a new screenshot arrives. |
 | RF08 | Let the player subscribe to notifications from the client. |
 | RF09 | Show the captured screenshot itself in the notification and in the client. |
-| RF10 | Return the PC to sleep when collection finishes. |
+| RF10 | Return the PC to sleep when collection finishes — but only if this run's own wake woke it; never sleep a PC the player is actively using for something else. |
 | RF11 | Install the collector on Windows from a single installer, with no separate runtime or manual setup required beyond it. |
 | RF12 | Keep running the collector's own schedule across reboots, with no WSL, terminal, or Claude Code session involved. |
 | RF13 | Show, in the collector's own window, when it last inspected the shop and when it will next do so. |
@@ -117,8 +117,10 @@ only the screen itself, once the shop is on it.
 - **RF09** — Given a notification for a captured shop, when the player opens it, then the
   screenshot itself is visible — full enough to judge the offer at a glance — with no caption
   claiming to name cards or costs that were never decoded.
-- **RF10** — Given collection has finished, when 1 minute has passed, then the PC is asleep, and this
-  step can be disabled by configuration for debugging (Article 7).
+- **RF10** — Given collection has finished and this run's own wake trigger is what woke the PC,
+  when 1 minute has passed, then the PC is asleep; given collection finished but the PC was already
+  awake before this run started (the player using it for something else), then the PC is left
+  awake. Either way, this step can be disabled by configuration for debugging (Article 7).
 - **RF11** — Given a Windows PC with no prior Snaptritor component installed, when the installer is
   run once and any first-run setup (e.g. pairing with the notification subscription) is completed,
   then the collector is present and will run its next scheduled inspection unassisted.

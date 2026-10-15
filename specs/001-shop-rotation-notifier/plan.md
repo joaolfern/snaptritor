@@ -61,8 +61,9 @@ packages/collector        Electron app, TypeScript. One installed binary, two en
                           6. hash it; compare to CollectorState.lastImageHash
                           7. unchanged → update lastInspectionAt/nextInspectionAt, exit 0
                           8. changed → POST image + hash to the Worker, then update state
-                          9. return the game to its prior state and let the machine go back to
-                             sleep (RF10), unless disabled for debugging
+                          9. let the machine go back to sleep (RF10) — but only if this run's own
+                             wake is what woke it; a PC already awake for other reasons is left
+                             alone. Either way, skippable for debugging
 
   default / status window RF13–RF15
                           Reads the same CollectorState file. Shows last/next inspection time.

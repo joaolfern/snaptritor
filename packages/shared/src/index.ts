@@ -1,2 +1,2 @@
-export * from "./schemas.js";
-export * from "./imageHash.js";
+export * from "./schemas.ts";
+export * from "./imageHash.ts";

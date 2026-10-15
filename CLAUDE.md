@@ -131,6 +131,33 @@ not just write it — useful, with real limits worth knowing before re-discoveri
   the capture silently shows whatever else happens to be on top. Verify by actually looking at the
   saved image (the `Read` tool displays PNGs), not just by checking the file exists and is
   non-empty — that check alone passed while the captured content was still wrong.
+- **A pnpm workspace package's bare specifier import (`@snaptritor/shared`) does not reliably
+  resolve when Node's native TS runtime loads it from Windows over the UNC path**, even though the
+  exact same import resolves fine under vitest (WSL) for the same file. Two separate causes, both
+  worth knowing apart:
+  - Node's native TS loader doesn't reliably follow a *third-party* package's
+    `"main": "./src/index.ts"` field the way a bundler (or vitest) does. Fix: import the target
+    `.ts` file by a **relative path** instead of the package name, from any file that needs to
+    cross this boundary (e.g. `from "../../shared/src/index.ts"`, not `from "@snaptritor/shared"`).
+    Internal re-exports need the same treatment — `packages/shared/src/index.ts` itself had to
+    change its own `export * from "./schemas.js"` to `"./schemas.ts"` (plus
+    `"allowImportingTsExtensions": true` in every package's `tsconfig.json` that now imports a
+    `.ts` path, or `tsc --noEmit` rejects it even though `node` runs it fine).
+  - Once that's fixed, a *further* resolution for the package's own dependencies (e.g. `zod`,
+    imported bare from `packages/shared/src/schemas.ts`) can still fail on Windows specifically:
+    pnpm links a workspace package's dependencies via a relative **symlink**
+    (`packages/shared/node_modules/zod -> ../../../node_modules/.pnpm/zod@.../node_modules/zod`),
+    and Windows' `node.exe` does not reliably follow a WSL-created relative symlink read over the
+    UNC bridge — it reports the package as simply not found. The fix used here: install a real
+    (non-symlinked) copy locally on Windows (same local-path-then-robocopy pattern as the native
+    modules) and robocopy it directly over the symlink at `packages/shared/node_modules/<pkg>`,
+    replacing it with a real directory. **This is a local, ephemeral fix** — it lives in a
+    gitignored `node_modules` and gets reset by the next `pnpm install` from WSL, so redo it
+    whenever a Windows-side run of collector code needs a shared package's own dependency and hits
+    this. Mid-copy, a running `wrangler dev` process watching the filesystem can log a few
+    transient "could not resolve" errors as it rebuilds against a half-copied tree — check the
+    final state (a plain request against the dev server) before concluding something is actually
+    broken.
 
 ## Conventions
 

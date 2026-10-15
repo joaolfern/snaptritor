@@ -12,25 +12,33 @@
 const GRID_SIZE = 8; // 8x8 = 64 bits of hash, packed into 16 hex characters
 
 /**
- * @param pixels RGBA pixel data (4 bytes per pixel), e.g. from a `Buffer`/`Uint8ClampedArray`
- *   as a screen-capture library or canvas `ImageData` would hand it over.
+ * @param pixels RGB or RGBA pixel data, channel-interleaved (e.g. R,G,B,R,G,B,… or
+ *   R,G,B,A,R,G,B,A,…), as a `Buffer`/`Uint8ClampedArray`/`Uint8Array`. **Must already be in RGB
+ *   channel order** — a capture library whose native order is BGR (nut-js's default) needs
+ *   converting first; this function does not detect or correct channel order itself, since that's
+ *   a capture-library-specific concern, not a hashing one.
  * @param width  the image's width in pixels
  * @param height the image's height in pixels
+ * @param channels number of bytes per pixel in `pixels` — 3 for RGB, 4 for RGBA (default 4; only
+ *   R, G and B are read, so an alpha channel's presence doesn't otherwise matter)
  * @returns a 16-character hex string
  */
 export function perceptualHash(
   pixels: Uint8ClampedArray | Uint8Array,
   width: number,
   height: number,
+  channels = 4,
 ): string {
   if (width <= 0 || height <= 0) {
     throw new Error(`perceptualHash: invalid dimensions ${width}x${height}`);
   }
-  if (pixels.length < width * height * 4) {
+  if (channels !== 3 && channels !== 4) {
+    throw new Error(`perceptualHash: channels must be 3 (RGB) or 4 (RGBA), got ${channels}`);
+  }
+  if (pixels.length < width * height * channels) {
     throw new Error(
-      `perceptualHash: pixel buffer too small for ${width}x${height} RGBA (expected at least ${
-        width * height * 4
-      } bytes, got ${pixels.length})`,
+      `perceptualHash: pixel buffer too small for ${width}x${height} at ${channels} channels/pixel ` +
+        `(expected at least ${width * height * channels} bytes, got ${pixels.length})`,
     );
   }
 
@@ -51,7 +59,7 @@ export function perceptualHash(
       let count = 0;
       for (let y = yStart; y < yEnd && y < height; y++) {
         for (let x = xStart; x < xEnd && x < width; x++) {
-          const i = (y * width + x) * 4;
+          const i = (y * width + x) * channels;
           const r = pixels[i] ?? 0;
           const g = pixels[i + 1] ?? 0;
           const b = pixels[i + 2] ?? 0;

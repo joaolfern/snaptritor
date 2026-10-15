@@ -21,3 +21,17 @@ export async function capture(rect?: WindowRect): Promise<Image> {
 export async function saveCapture(image: Image, filePath: string): Promise<void> {
   await saveImage({ image, path: filePath });
 }
+
+/**
+ * Converts a captured `Image` into RGB-ordered pixel bytes, ready for
+ * `@snaptritor/shared`'s `perceptualHash`. Needed because `Image.colorMode` defaults to **BGR**,
+ * not RGB — confirmed from the installed package's own `.d.ts` (`image.class.d.ts`) before
+ * writing this, not assumed. Returns the channel count too, since it varies (3 without alpha, 4
+ * with) and `perceptualHash` needs to know the real stride rather than guessing 4.
+ */
+export async function toHashablePixels(
+  image: Image,
+): Promise<{ data: Uint8Array; width: number; height: number; channels: number }> {
+  const rgb = await image.toRGB();
+  return { data: new Uint8Array(rgb.data), width: rgb.width, height: rgb.height, channels: rgb.channels };
+}

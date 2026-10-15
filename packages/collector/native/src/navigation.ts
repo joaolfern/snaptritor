@@ -49,9 +49,9 @@ export const NAVIGATE_TO_DAILY_CARDS: NavigationStep[] = [
  */
 export const DAILY_CARDS_REGION = {
   leftFraction: 0.375,
-  topFraction: 0.222,
+  topFraction: 0.2,
   widthFraction: 0.255,
-  heightFraction: 0.713,
+  heightFraction: 0.75,
 };
 
 /**

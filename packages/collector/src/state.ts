@@ -1,5 +1,9 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { CollectorState, INITIAL_COLLECTOR_STATE } from "@snaptritor/shared";
+// Relative, not the bare "@snaptritor/shared" specifier — Node's native TS runtime (used when
+// the collector's native/ code imports this file directly over the Windows side) doesn't reliably
+// follow a third-party package's "main" field; the relative path works everywhere (both here under
+// vitest and from native/'s raw-Node context) without needing two different versions of this file.
+import { CollectorState, INITIAL_COLLECTOR_STATE } from "../../shared/src/index.ts";
 
 /**
  * Reads the collector's local state file. A missing file is treated as a fresh install (returns

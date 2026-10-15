@@ -265,7 +265,10 @@ No orphans: every task below cites at least one requirement it serves.
 ### T010 — `packages/collector`: wire `--inspect` end to end
 
 - **Serves:** RF02, RF03, RF04, RF05, RF06, RF10, NF06
-- **Files:** `packages/collector/src/inspect.ts`, `packages/collector/src/cli.ts` (new)
+- **Files:** `packages/collector/native/src/inspect.ts`, `packages/collector/native/cli.ts` (new,
+  under `native/` — it imports T007–T009's native modules directly), plus
+  `packages/collector/native/src/windows/capture.ts` (`toHashablePixels` added),
+  `packages/shared/src/imageHash.ts` (`perceptualHash` gained a `channels` parameter)
 - **Do:** `inspect.ts` composes T001–T002's state/hash logic with T007–T009's window/capture/click
   modules: check `shouldRunInspection`; find+foreground the game window; run T009's click sequence;
   poll the landmark region (timeout → `recordError` + exit, never a half-loaded capture); capture
@@ -281,7 +284,44 @@ No orphans: every task below cites at least one requirement it serves.
   either "unchanged, nothing sent" or a successful `POST` to the local dev Worker (confirmed by
   that Worker's own console output). Run it twice in a row with nothing changed in the shop between
   runs: the second run must log "unchanged" and send nothing (RF04/RF05's real test).
-- **Status:** `[ ]`
+- **Status:** `[x]` — ran the real pipeline twice against the live game with a local
+  `wrangler dev` Worker: first run detected a change (first-ever run, no prior hash) and `POST`ed
+  successfully (`201 Created` in the Worker's own log, confirmed by fetching the stored image back
+  through `GET /images/:key` and reading it — the real Daily Cards rotation, correctly cropped);
+  second run correctly logged "Shop unchanged; nothing sent" and sent nothing (RF04/RF05's literal
+  test, though the capture region was also tuned between the two runs, so it's not a perfectly
+  clean isolated repeat — noted honestly rather than overstated). Four real fixes beyond the task's
+  literal description, each found by running for real rather than trusting the code:
+  1. **The user's correction, incorporated:** RF10 was going to sleep the PC unconditionally.
+     Changed to only sleep if *this run's own* wake trigger is what woke the PC — a scheduled
+     inspection must never yank the PC to sleep out from under the player if they're actively using
+     it for something else. Implemented as a heuristic (a recent system resume-from-sleep event in
+     the Windows Event Log, within a short time window) since there's no direct "did my task wake
+     this machine" signal. **Not verified against a real sleep/wake cycle** — doing that from this
+     session would risk disconnecting the interop channel this automation runs through; flagged in
+     the code as implemented-but-unverified until T011/T018 exercise it for real.
+  2. **`@snaptritor/shared`'s bare-specifier import doesn't resolve** when Node's native TS loader
+     runs the importing file from Windows over the UNC path (even though the identical import
+     resolves fine under vitest/WSL) — it doesn't reliably follow a third-party package's
+     `"main": "./src/index.ts"` field. Fixed by importing via a relative path instead, in both
+     `inspect.ts` and `packages/collector/src/state.ts`; `packages/shared/src/index.ts`'s own
+     internal re-exports needed the same `.js` → `.ts` fix, plus `allowImportingTsExtensions` added
+     to every affected `tsconfig.json`. Recorded in `CLAUDE.md`.
+  3. **A further, separate break once that was fixed:** `zod` (imported bare from
+     `packages/shared/src/schemas.ts`) still failed to resolve on Windows — pnpm links it via a
+     relative symlink, which Windows' `node.exe` doesn't reliably follow when read over the UNC
+     bridge. Fixed the same way as the native modules: installed a real local copy on Windows,
+     `robocopy`'d it directly over the symlink. Ephemeral (gitignored, reset by the next
+     `pnpm install`) and documented as a redo-when-needed step in `CLAUDE.md`, not a permanent fix.
+  4. **nut-js's `Image` defaults to BGR color mode**, not RGB, and its channel count varies (3 or
+     4) — caught by reading `image.class.d.ts` *before* wiring it into `perceptualHash`, which had
+     assumed RGBA. Added `toHashablePixels()` (calls `.toRGB()`, returns the real channel count)
+     and generalized `perceptualHash` to take a `channels` parameter instead of hardcoding 4
+     (default kept at 4, so T001's existing tests needed no changes — reran them to confirm: 13/13
+     still pass).
+  Also tuned `DAILY_CARDS_REGION` after the first live capture showed it clipped the "Daily Cards"
+  title and the bottom pricing row; re-verified with a direct capture before settling on the wider
+  region. Left the Worker dev server stopped and the game in its normal state afterward.
 
 ### T011 — `packages/collector`: wake-capable Scheduled Task registration
 
