@@ -138,7 +138,7 @@ is stored — the collector's own `--inspect` logs that rejection into `Collecto
 | Cloudflare KV | — | Subscription + inspection metadata. | Free tier |
 | Cloudflare R2 | — | Screenshot object storage; resolves Q09's hosting half. | Free tier (10 GB storage, no egress fee — orders of magnitude more than a few images a day need) |
 | Web Crypto (`SubtleCrypto`, built into the Workers runtime) | — | VAPID JWT signing (ECDSA P-256) + Web Push payload encryption (AES-GCM, HKDF) — resolves Q04: Workers implement the same `SubtleCrypto` browsers do, which covers everything Web Push needs with no extra library. | Free, built-in |
-| Windows Task Scheduler (`schtasks.exe` / its COM API), "wake this computer" flag | OS built-in | Scheduling and self-wake (resolves Q06) — no external Wake-on-LAN sender needed. | Free, built-in |
+| Windows Task Scheduler, via PowerShell's `*-ScheduledTask` cmdlets | OS built-in | Scheduling and self-wake (resolves Q06) — no external Wake-on-LAN sender needed. `schtasks.exe`'s plain CLI flags can't set "wake this computer" at all (XML/COM-API-only); verified during `/implement` (T011) that the PowerShell cmdlets can and do. | Free, built-in |
 
 ## Risks and fallbacks
 

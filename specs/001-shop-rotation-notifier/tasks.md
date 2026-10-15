@@ -326,18 +326,28 @@ No orphans: every task below cites at least one requirement it serves.
 ### T011 — `packages/collector`: wake-capable Scheduled Task registration
 
 - **Serves:** RF01, RF12, Q06 (self-wake)
-- **Files:** `packages/collector/src/scheduler.ts`,
-  `packages/collector/scripts/smoke-schedule.ts` (new)
-- **Do:** Wraps `schtasks.exe /create` (via Node's `child_process`) to register a task that runs
-  `--inspect` at given times with the "wake the computer to run this task" flag set, and
-  `schtasks.exe /change /disable` / `/enable` to implement the pause-wake-automation toggle RF15
-  needs (this is what T012's toggle actually calls). `smoke-schedule.ts` registers a throwaway task
-  one minute in the future, then deletes it.
+- **Files:** `packages/collector/native/src/scheduler.ts`,
+  `packages/collector/native/scripts/smoke-schedule.ts` (new, under `native/`)
+- **Do:** Registers a wake-capable Scheduled Task that runs `--inspect` at given times, and
+  enables/disables it to implement the pause-wake-automation toggle RF15 needs (this is what
+  T012's toggle actually calls). `smoke-schedule.ts` registers a throwaway task, verifies its real
+  settings, exercises disable/enable, then deletes it.
 - **Verify:** Via interop: `powershell.exe -Command "node ...\smoke-schedule.ts"` —
   `schtasks /query /tn SnaptritorSmoke` shows the task exists with `Scheduled Task State: Enabled`
   and its wake-capable property set, immediately after creation; the script's own cleanup step
   removes it and a second query confirms it's gone.
-- **Status:** `[ ]`
+- **Status:** `[x]` — ran for real; all four states verified via `Get-ScheduledTask` (not just
+  "the registration call didn't throw"): `{exists:true, enabled:true, wakeToRun:true}` right after
+  creation, `enabled:false` after disable, `enabled:true` after re-enable, `exists:false` after
+  delete. One correction to the task's own description: `schtasks.exe`'s plain command-line flags
+  **cannot** set "wake the computer to run this task" at all — that's an XML/COM-API-only setting,
+  not exposed by `schtasks /create`'s basic parameters. Used PowerShell's `*-ScheduledTask` cmdlets
+  (`New-ScheduledTaskSettingsSet -WakeToRun`, `Register-ScheduledTask`, `Enable`/`Disable-
+  ScheduledTask`) instead, verified live before writing any production code. This also sidesteps a
+  separate, real gotcha found while cross-checking against `schtasks.exe` directly as the task
+  originally specified: its text output is locale-dependent (this machine is pt-BR Windows), so a
+  naive `Select-String 'Enabled'` match silently found nothing — exactly the kind of fragility the
+  PowerShell object cmdlets (`$task.State`, a real enum, not a localized string) avoid.
 
 ### T012 — `packages/collector`: status window
 
