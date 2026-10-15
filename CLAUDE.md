@@ -319,5 +319,8 @@ not just write it — useful, with real limits worth knowing before re-discoveri
 
 - Specs, code, comments and commit messages in English. The shared doc stays Portuguese.
 - `packages/*` is a pnpm workspace: `shared` (contracts), `collector` (the installed Windows app),
-  `worker` (Cloudflare), `client` (PWA/TWA). Packages are created when a task calls for them, not
-  in advance.
+  `worker` (Cloudflare), `client` (PWA). Packages are created when a task calls for them, not in
+  advance. T017 (2026-10-15) dropped the originally-planned Android TWA wrap (Bubblewrap, a
+  signing key, Play-Store-style packaging) — RF08/RF09 only require subscribing and receiving a
+  push, which a plain browser visit or "Add to Home Screen" already does identically, with none of
+  that extra tooling.

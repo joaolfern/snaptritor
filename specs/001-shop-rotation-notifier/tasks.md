@@ -604,30 +604,45 @@ No orphans: every task below cites at least one requirement it serves.
   - The manifest's `icons` array is empty — real icon assets are a design decision for T017
     (TWA packaging needs at least a 512×512 icon), not invented here.
 
-### T017 — Checkpoint: wrap the client as a TWA and install on the user's phone
+### T017 — Checkpoint: confirm push works on the user's phone
 
 - **Serves:** RF08, RF09
-- **Files:** none from here — Android/TWA packaging config, added once this checkpoint starts
-- **Do:** Ask the user for an Android device to install on, and confirm they're fine generating a
-  signing key for the TWA (Bubblewrap or Android Studio). Wrap T015's PWA, install it, subscribe,
-  and confirm a real push notification shows the screenshot inline (ties together T014's `image`
-  option end to end on a real device).
+- **Files:** none
+- **Do:** **Scope changed 2026-10-15** — dropped the originally-planned Android TWA wrap
+  (Bubblewrap/Android Studio, a signing key, Play-Store-style packaging). Neither RF08 nor RF09
+  mentions an installed native app; both only require subscribing and receiving a push, which a
+  plain browser visit (optionally "Add to Home Screen," already supported — `manifest.webmanifest`
+  exists and `display: "standalone"` is set) does identically, with none of the extra build
+  tooling. The user visits `snaptritor.nosnocabo.com.br` on their phone, subscribes, and confirms a
+  real push notification shows the screenshot inline.
 - **Verify:** The user confirms a test notification arrived on their phone and showed the image
   without needing to tap it first.
-- **Status:** `[ ]`
+- **Status:** `[ ]` — scope narrowed and ready to verify; needs the user to actually do it on their
+  phone, which hasn't happened yet.
 
 ### T018 — Checkpoint: confirm wake-timer support and schedule cadence
 
 - **Serves:** RF01
-- **Files:** `packages/collector/src/scheduler.ts` (the real schedule times, once known)
+- **Files:** `packages/collector/native/scripts/postinstall.ts` (`DEFAULT_DAILY_TIMES`)
 - **Do:** Ask the user to check their BIOS/firmware for RTC/ACPI wake-timer support (Q03) — not
   full Wake-on-LAN, just the narrower setting the self-wake Scheduled Task needs — and to confirm
-  how often they want inspection to run (Q02): a fixed schedule (e.g. three times a day) is the
-  simplest default if they have no preference.
+  how often they want inspection to run (Q02).
 - **Verify:** The user confirms wake timers are enabled (or what they found), and states the
-  cadence they want; T011's registration is updated with the real times if they differ from the
-  placeholder used during T011's own testing.
-- **Status:** `[ ]`
+  cadence they want; the installer's registration is updated with the real times if they differ
+  from the placeholder used during T011's own testing.
+- **Status:** `[~]` — Q02 resolved by the user (2026-10-15): the shop's real daily reset is 19:00
+  UTC (16:00 BRT), with featured/spotlight rotating every 8h from that same anchor — boundaries at
+  16:00/00:00/08:00 BRT, not the earlier arbitrary 03:10/11:10/19:10 placeholder (which was just
+  evenly spaced for T011's own smoke test, never actually anchored to the real reset).
+  `DEFAULT_DAILY_TIMES` updated to `["00:10", "08:10", "16:10"]` and republished (v0.3.0). **Not
+  yet `[x]`: Q03 (BIOS/firmware wake-timer support) is still unanswered** — without it, RF01's
+  "the PC wakes itself" premise is unverified; the Scheduled Task is registered wake-capable
+  (`WakeToRun: true`, confirmed live in T011) but that only matters if the firmware actually
+  honors it. Also: **auto-update (T020) does not re-register the Scheduled Task** — NSIS's
+  `customInstall` macro only runs on a real install, not a differential auto-update, so an
+  already-installed collector with the old cadence baked in needs one more manual reinstall to
+  pick up these corrected times; a later improvement could have `main.ts` re-run the registration
+  on every startup instead, flagged here rather than built under today's time pressure.
 
 ### T019 — `packages/worker`: pairing endpoints, and per-install secrets
 

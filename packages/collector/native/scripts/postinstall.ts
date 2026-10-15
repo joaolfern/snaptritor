@@ -16,10 +16,15 @@ import { INITIAL_COLLECTOR_STATE } from "../../../shared/src/index.ts";
 import { registerInspectionTask, unregisterTask } from "../src/scheduler.ts";
 
 const TASK_NAME = "SnaptritorInspection";
-// 3x/day, 10 minutes after each 8-hour shop-refresh boundary (plan.md's Q02: the real cadence is
-// still a user decision, finalized at T018 — this placeholder matches T011's own smoke-tested
-// value so the installer's default behaves exactly like what was already verified live).
-const DEFAULT_DAILY_TIMES = ["03:10", "11:10", "19:10"];
+// T018 (resolved 2026-10-15, by the user): the shop's daily reset is 19:00 UTC (16:00 BRT), and
+// featured/spotlight rotate every 8h from that same anchor — boundaries at 16:00/00:00/08:00 BRT.
+// `New-ScheduledTaskTrigger -At` uses the Task Scheduler's own local system time, not UTC, so
+// these are BRT wall-clock times directly (the installer only ever targets this one machine,
+// already in that timezone) — not the earlier arbitrary 03:10/11:10/19:10 placeholder, which was
+// just evenly spaced for T011's own smoke test and never actually anchored to the real reset.
+// 10 minutes after each boundary, same buffer rationale as before: give the server-side rotation
+// time to actually land before checking.
+const DEFAULT_DAILY_TIMES = ["00:10", "08:10", "16:10"];
 
 function flagValue(name: string): string | undefined {
   const index = process.argv.indexOf(`--${name}`);
