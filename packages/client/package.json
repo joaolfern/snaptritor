@@ -6,7 +6,7 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.sw.json",
-    "build": "tsc -p tsconfig.build.json --outDir dist && tsc -p tsconfig.build.sw.json --outDir dist"
+    "build": "tsc -p tsconfig.build.json --outDir dist && tsc -p tsconfig.build.sw.json --outDir dist && node -e \"require('fs').copyFileSync('index.html', 'dist/index.html'); require('fs').copyFileSync('manifest.webmanifest', 'dist/manifest.webmanifest')\""
   },
   "devDependencies": {
     "typescript": "^5.6.3",

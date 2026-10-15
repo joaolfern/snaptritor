@@ -533,19 +533,72 @@ No orphans: every task below cites at least one requirement it serves.
 
 ### T016 — Checkpoint: Cloudflare account, bindings, VAPID keys, deploy
 
-- **Serves:** RF06, RF07, RF17, Article 8
-- **Files:** none from here — fills in real values T003's `wrangler.toml` left as placeholders
-- **Do:** Ask the user to log into (or create) a Cloudflare account and authorize `wrangler`. Create
-  the real KV namespace and R2 bucket, generate a VAPID keypair, and store it with
-  `wrangler secret put VAPID_PRIVATE_KEY` (Article 8 — never in the repo). Point the Worker at the
-  user's own domain, `snaptritor.nosnocabo.com.br` (`CLAUDE.md`'s 2026-10-15 note — a custom route,
-  not the default `*.workers.dev`), and upload the built installer to R2 for T019's
-  `GET /download/collector` to serve. Deploy the Worker.
-- **Verify:** `pnpm --filter worker exec wrangler deploy` succeeds; a manual `curl` `POST` to the
-  deployed `/subscriptions` with a real browser-generated subscription returns `201`; subscribing a
-  real device and manually `POST`ing a test image to `/inspections` results in an actual push
-  notification arriving (the first real end-to-end proof of RF07).
-- **Status:** `[ ]`
+- **Serves:** RF06, RF07, RF08, RF09, RF17, Article 8
+- **Files:** `packages/worker/wrangler.toml` (real KV id, R2 bucket, custom-domain route, `[assets]`
+  binding), `packages/worker/.dev.vars` (new — the old dev-placeholder VAPID keypair, moved out of
+  the checked-in `[vars]`), `packages/client/manifest.webmanifest` (new),
+  `packages/client/package.json` (build script copies `index.html`/the manifest into `dist/`),
+  `packages/client/src/app.ts` (service-worker registration fix, found during this checkpoint —
+  see below)
+- **Do:** Logged into the `joaolfern@proton.me` Cloudflare account and authorized `wrangler`.
+  Created the real `SUBSCRIPTIONS` KV namespace and `snaptritor-shop-images` R2 bucket, generated a
+  real VAPID keypair (Web Crypto, verified round-trip before use), stored
+  `VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` via `wrangler secret put` (Article 8 — only
+  `VAPID_PUBLIC_KEY`, which is not secret by design, stays in checked-in `[vars]`). Pointed the
+  Worker at `snaptritor.nosnocabo.com.br` (the `nosnocabo.com.br` zone already existed on the
+  account) and uploaded the real built installer to R2 at `installer/snaptritor-setup.exe`. Also
+  wired `packages/client` to be served from the **same** Worker deployment via `[assets]` (a plan.md
+  decision made during this checkpoint — see plan.md's "hosting" note under `packages/client`), since
+  nothing had previously deployed the client at all.
+- **Verify:** `wrangler deploy` succeeds; `curl -X POST .../subscriptions` with a real
+  `PushSubscriptionRecord`-shaped body against the live domain returns `201`; `curl -X POST
+  .../pairing/code` → `.../pairing/claim` → `curl -X POST .../inspections` with a real per-install
+  secret and a tiny test PNG returns `201`, the image is fetchable back from `/images/:key`, and
+  `/inspections/latest` reflects it; `/collector/status` flips to `linked:true` after claim;
+  `/download/collector` streams the real uploaded installer (confirmed as a genuine PE32 NSIS
+  self-extracting archive, not just a non-empty response). A fully real "push notification arrives
+  on a real device" proof is still blocked on T017 (no real device/browser subscription exists
+  yet) — the push *attempt* was verified instead: POSTing to a fake-but-correctly-shaped FCM
+  endpoint fired a real fetch to Google's push service, which rejected it, and the Worker's RF07
+  cleanup logic correctly deleted that dead subscription from KV afterward (confirmed via `wrangler
+  kv key list` before/after) — real proof the fan-out + cleanup path works, short of an actual
+  phone buzzing.
+- **Status:** `[x]` — deployed and verified live at `https://snaptritor.nosnocabo.com.br`, test
+  data cleaned out of the real KV/R2 afterward. Real findings:
+  - **A genuine client bug, found only because this was the first real browser test of RF08**:
+    `sw.ts` exports `buildNotificationOptions` (so `sw.test.ts` can test it as plain data, no fake
+    `self` needed) but `app.ts` registered it as a classic script — browsers error on `export`
+    outside a module (`Uncaught SyntaxError: Unexpected token 'export'`), and registration's
+    promise rejected with "script evaluation failed", silently breaking push end to end. Fixed by
+    registering with `{ type: "module" }` (reported live by the user testing the real deployed
+    page — exactly the kind of bug no amount of `vitest` coverage catches, since the unit tests
+    import `sw.ts`'s exports directly rather than loading it as a browser would).
+  - **`wrangler.toml` key ordering matters**: a TOML table header (`[assets]`, `[vars]`) silently
+    absorbs every bare `key = value` line that follows it, including ones meant for the root table
+    — confirmed live when `[assets]` placed before `kv_namespaces`/`routes` made
+    `vitest-pool-workers` report "Unexpected fields found in assets field: routes,kv_namespaces,
+    r2_buckets" and every binding came back `undefined`. Table headers must come last.
+  - **R2 needs two separate dashboard-side enables, not one**: creating a bucket (`wrangler r2
+    bucket create`) worked right after the user enabled R2 Object Storage, but `wrangler deploy`
+    still failed binding to it ("R2 binding error... Please enable R2... code: 10136") for several
+    minutes afterward — not a payment-method issue (one was already on file, R2 Paid already
+    active), not a wrangler-version issue (reproduced identically on wrangler 4), just propagation
+    delay for the Worker-to-R2 binding permission specifically. Retrying after a few minutes
+    succeeded with no config change.
+  - **A Worker `routes` entry does not create a DNS record.** It only attaches the Worker to
+    traffic that already reaches Cloudflare for that hostname — `snaptritor.nosnocabo.com.br`
+    didn't resolve at all until the user added a proxied (orange-cloud) DNS record for it (content
+    doesn't matter — a placeholder `192.0.2.1` A record is standard practice here, since the Worker
+    route handles real traffic, not whatever the record points to).
+  - **DNS propagation after adding that record was genuinely flaky for a few minutes** (confirmed
+    live: alternating `HTTP 000`/`Could not resolve host` and real `200`s from the same curl
+    command seconds apart) — worth a few retries before assuming something is actually broken.
+  - Residual gap, noted rather than silently skipped: `GET /download/collector` doesn't honor
+    `Range` requests (a ranged `curl` still downloaded the full ~165 MB) — fine for correctness
+    (confirmed: the downloaded bytes are a valid NSIS installer), just not resumable on a flaky
+    connection. Not required by RF17 and not fixed here.
+  - The manifest's `icons` array is empty — real icon assets are a design decision for T017
+    (TWA packaging needs at least a 512×512 icon), not invented here.
 
 ### T017 — Checkpoint: wrap the client as a TWA and install on the user's phone
 

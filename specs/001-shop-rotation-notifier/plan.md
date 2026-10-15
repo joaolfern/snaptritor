@@ -119,6 +119,16 @@ packages/worker           Cloudflare Worker, TypeScript.                RF06, RF
                             `/images/:key`; no separate static host needed)
 
 packages/client            PWA, TypeScript, served from the user's own domain.   RF08, RF09, RF16, RF17
+  hosting (T016, decided 2026-10-15): one Worker, not a separate Cloudflare Pages project. The
+  same `snaptritor-worker` deployment that serves the API also serves `packages/client/dist`'s
+  built files via `wrangler.toml`'s `[assets]` binding (`directory = "../client/dist"`) — any
+  request matching a file there (`/`, `/app.js`, `/sw.js`, `/manifest.webmanifest`) is served
+  directly; anything else falls through to the existing `fetch` handler untouched. Chosen because
+  `app.ts` already assumes same-origin fetches with no CORS/base-URL config ("this file and the
+  Worker's API both live under the user's own domain") — a second Pages project would need to
+  either violate that assumption or add a proxy layer for no real benefit. `index.html` and
+  `manifest.webmanifest` live at the client package root (not emitted by `tsc`), so the client's
+  own `build` script copies them into `dist/` alongside the compiled JS.
   service worker           `push` event → `showNotification(title, { image: <R2 url> })` —
                             renders inline, no tap needed (Q09, resolved in spec.md)
   app shell                `notificationclick` → open, fetch GET /inspections/latest, show it;
@@ -244,3 +254,8 @@ is stored — the collector's own `--inspect` logs that rejection into `Collecto
   needs `electron-rebuild`-ing nut-js specifically for Electron on every dependency bump — an
   ongoing maintenance cost for a one-time disk-size saving. A bundled portable `node.exe` sidesteps
   the ABI question entirely.
+- **A separate Cloudflare Pages project for `packages/client`, with the Worker on its own
+  subdomain.** Standard Cloudflare pattern, but would force either CORS (the client's own code
+  already assumes same-origin) or a Pages Functions proxy layer whose only job would be forwarding
+  to the Worker — pure indirection for no benefit here, since both pieces are small enough to ship
+  from one deployment. `wrangler.toml`'s `[assets]` binding does this directly.

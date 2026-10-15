@@ -266,6 +266,43 @@ not just write it — useful, with real limits worth knowing before re-discoveri
   packaging step reports a "duplicate" that looks like a legitimate case-variant pair, check
   whether the output path is UNC-backed before assuming the source package is actually broken.
 
+## Cloudflare deployment (T016, validated — do not re-derive)
+
+- **A `wrangler.toml` table header (`[assets]`, `[vars]`, …) silently absorbs every bare
+  `key = value` line that follows it, including ones meant for the root table.** Confirmed live:
+  placing `[assets]` before `kv_namespaces`/`routes` made `vitest-pool-workers` report "Unexpected
+  fields found in assets field: routes,kv_namespaces,r2_buckets" and every binding came back
+  `undefined` — ordinary TOML behavior, not a wrangler bug. Put every root-level `key = value`
+  (`name`, `kv_namespaces`, `r2_buckets`, `routes`, …) **before** any `[table]` header.
+- **A service worker registered without `{ type: "module" }` cannot contain an `export`
+  statement** — the browser loads it as a classic script by default, and `export` outside a module
+  is a syntax error (`Uncaught SyntaxError: Unexpected token 'export'`), which silently fails the
+  whole `register()` promise with "script evaluation failed". This repo's `sw.ts` legitimately
+  exports a pure function so `sw.test.ts` can test it without faking `self` — the fix is
+  `navigator.serviceWorker.register("/sw.js", { type: "module" })`, not removing the export. Only
+  surfaced when a real browser loaded the real deployed page; the unit tests import `sw.ts`'s
+  exports directly and never exercise browser-side script-loading semantics at all.
+- **Enabling R2 is two separate account-level steps, not one.** `wrangler r2 bucket create`
+  succeeding (after the dashboard's "enable R2" prompt) does not mean `wrangler deploy` can bind a
+  Worker to that bucket yet — it failed for several more minutes with "R2 binding error... Please
+  enable R2... [code: 10136]" even with a payment method already on file and R2 Paid already
+  active, and identically on both wrangler 3 and 4. Just a propagation delay for the Worker↔R2
+  binding permission specifically; retrying after a few minutes with no config change succeeded.
+- **A Worker `routes` entry does not create a DNS record — it only attaches the Worker to traffic
+  that already reaches Cloudflare for that hostname.** A brand-new subdomain route (e.g.
+  `snaptritor.nosnocabo.com.br/*`) needs its own proxied (orange-cloud) DNS record too, or the
+  hostname doesn't resolve at all. The record's content is irrelevant when proxied — the Worker
+  route handles real traffic, not whatever the record points to — so a placeholder `A` record
+  (e.g. `192.0.2.1`) is standard practice. Expect a few minutes of flaky propagation afterward
+  (alternating real `200`s and `Could not resolve host` from the same request seconds apart) before
+  concluding something is actually broken.
+- **The client and the Worker API are deployed as one Worker, not a separate Cloudflare Pages
+  project** — `wrangler.toml`'s `[assets]` binding (`directory = "../client/dist"`) serves
+  `packages/client`'s built files directly for any matching request, falling through to the
+  existing `fetch` handler otherwise. `index.html` and `manifest.webmanifest` live at the client
+  package root (not emitted by `tsc`), so the client's own `build` script copies them into `dist/`
+  alongside the compiled JS — don't `tsc`-only build and expect the static page to be there.
+
 ## Conventions
 
 - Specs, code, comments and commit messages in English. The shared doc stays Portuguese.

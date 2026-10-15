@@ -33,3 +33,6 @@ packages/collector/native/dist-installer/
 # os / editor
 .DS_Store
 Thumbs.db
+
+# Claude Code session-internal state, not project source
+.claude/scheduled_tasks.lock

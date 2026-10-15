@@ -121,7 +121,13 @@ async function init(): Promise<void> {
     return;
   }
 
-  await navigator.serviceWorker.register("/sw.js");
+  // { type: "module" }: sw.ts exports `buildNotificationOptions` so sw.test.ts can test it as
+  // plain data (no fake `self` needed) — but that `export` keyword is a syntax error if the
+  // browser loads this script as a classic (non-module) script, which registration defaults to.
+  // Confirmed live: registering without this option failed with "Uncaught SyntaxError:
+  // Unexpected token 'export'" and the registration promise rejected with "script evaluation
+  // failed", silently breaking RF08 end to end.
+  await navigator.serviceWorker.register("/sw.js", { type: "module" });
 
   // Scenario 5/8: a returning visitor with an existing subscription skips straight to the
   // pairing/status view — no need to click "subscribe" again.

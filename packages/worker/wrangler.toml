@@ -3,23 +3,42 @@ main = "src/index.ts"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
-# Real ids/names are created in T016 (Cloudflare account checkpoint). These placeholders are
-# enough for local dev and for @cloudflare/vitest-pool-workers, which simulates both locally
-# regardless of what's written here.
+# T016 (Cloudflare account checkpoint), done 2026-10-15: real KV namespace and R2 bucket,
+# created via `wrangler kv namespace create` / `wrangler r2 bucket create` under the
+# joaolfern@proton.me Cloudflare account.
 kv_namespaces = [
-  { binding = "SUBSCRIPTIONS", id = "local-dev-placeholder" }
+  { binding = "SUBSCRIPTIONS", id = "0aab7aa802584c99b9585e6a143278ff" }
 ]
 
 r2_buckets = [
-  { binding = "SHOP_IMAGES", bucket_name = "snaptritor-shop-images-dev" }
+  { binding = "SHOP_IMAGES", bucket_name = "snaptritor-shop-images" }
 ]
 
-# Dev-only placeholders — never real values. The real secrets are set via `wrangler secret put`
-# at deploy time (T016), per constitution Article 8. This VAPID keypair was generated once, only
-# to make local dev/test runs self-contained; it has never signed a real push and never will.
-# (COLLECTOR_SECRET removed 2026-10-15: superseded by RF18's per-install secrets, issued at
-# pairing-claim time and stored in KV — there is no longer a single global secret to configure.)
+# T016: the real domain, not the default *.workers.dev (CLAUDE.md's 2026-10-15 install-flow
+# note). The `nosnocabo.com.br` zone already exists on this Cloudflare account; this adds the
+# subdomain as a route to this Worker.
+routes = [
+  { pattern = "snaptritor.nosnocabo.com.br/*", zone_name = "nosnocabo.com.br" }
+]
+
+# NOTE: table headers ([assets], [vars]) must come after every plain key = value assignment
+# above — TOML attributes any bare key following a table header to that table, not the root, so
+# ordering this wrong silently swallows kv_namespaces/r2_buckets/routes into [assets] instead
+# (confirmed live: vitest-pool-workers warned "Unexpected fields found in assets field:
+# routes,kv_namespaces,r2_buckets" and every binding came back undefined).
+
+# Client and Worker API share one origin by design (app.ts's own comment: "no CORS and no
+# separate base-URL config") — this binding serves packages/client/dist's static files (built by
+# `pnpm --filter client build`) directly for any request that matches a file there; anything else
+# falls through to this file's fetch handler below, so the existing API routes are untouched.
+[assets]
+directory = "../client/dist"
+
+# VAPID_PUBLIC_KEY is, by design, not secret (it's handed to browsers via GET /vapid-public-key
+# and PushManager.subscribe's applicationServerKey) — safe to commit here. VAPID_PRIVATE_KEY and
+# VAPID_SUBJECT are NOT here (Article 8): set via `wrangler secret put` instead, done as part of
+# this same T016 pass. (COLLECTOR_SECRET removed 2026-10-15: superseded by RF18's per-install
+# secrets, issued at pairing-claim time and stored in KV — there is no longer a single global
+# secret to configure.)
 [vars]
-VAPID_PUBLIC_KEY = "BKZVxGgNYO4q7y1F-XZuTvVDWOninE5UusSMCKFWpLA5zjfj6WL_2H2rnUbjZwKBf7TaDqZQs0y4ctjBWGpERps"
-VAPID_PRIVATE_KEY = "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgo_8OYUEKlvZSGvGe4Dki4d8f46GL25Dqy-ZiDKe14hyhRANCAASmVcRoDWDuKu8tRfl2bk71Q1jp4pxOVLrEjAihVqSwOc434-li_9h9q51G42cCgX-02g6mULNMuHLYwVhqREab"
-VAPID_SUBJECT = "mailto:dev-placeholder@example.com"
+VAPID_PUBLIC_KEY = "BDQ9zkHlw6FbKUhtECvGScl1Zd758mOFcTpnww_-1tAev04O-iAjvKKbbZ8SRWc0Mko_S8JXfoFj-9ZM4teGef8"
