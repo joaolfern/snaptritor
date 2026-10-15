@@ -25,6 +25,11 @@ specs/**/snapshots/
 # meaningful to version, and could incidentally contain something personal
 packages/collector/native/*.png
 
+# T013 installer build artifacts: a downloaded portable Node runtime (fetched at build time by
+# fetch-portable-node.mjs) and electron-builder's own packaged output
+packages/collector/native/vendor/
+packages/collector/native/dist-installer/
+
 # os / editor
 .DS_Store
 Thumbs.db

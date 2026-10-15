@@ -3,17 +3,22 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "main": "dist/main.js",
   "description": "Windows-only native automation (window-finding, screen capture, simulated input) and the Electron status window. Installed and run exclusively via Windows' own npm/node (over the repo's UNC path), never via WSL's pnpm -- see CLAUDE.md. Deliberately NOT a pnpm-workspace member: packages/collector/native is nested a level deeper than pnpm-workspace.yaml's 'packages/*' glob matches, so a WSL-side pnpm install never touches it and can't overwrite its Windows-compiled native bindings with Linux ones.",
+  "author": "elcharmando",
   "dependencies": {
-    "@nut-tree-fork/nut-js": "^4.2.6",
-    "electron": "^33.2.0"
+    "@nut-tree-fork/nut-js": "^4.2.6"
   },
   "devDependencies": {
     "typescript": "^5.6.3",
-    "@types/node": "^22.9.0"
+    "@types/node": "^22.9.0",
+    "electron": "^33.2.0",
+    "electron-builder": "^24.13.3"
   },
   "scripts": {
     "build:ui": "node node_modules/typescript/bin/tsc -p tsconfig.json && node -e \"require('fs').copyFileSync('src/ui/status.html', 'dist/status.html')\"",
-    "start:ui": "node node_modules/electron/dist/electron.exe dist/main.js"
+    "start:ui": "node node_modules/electron/dist/electron.exe dist/main.js",
+    "fetch-portable-node": "node scripts/fetch-portable-node.mjs",
+    "build:installer": "npm run build:ui && npm run fetch-portable-node && node node_modules/electron-builder/out/cli/cli.js build --win nsis"
   }
 }

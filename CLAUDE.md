@@ -239,6 +239,32 @@ not just write it — useful, with real limits worth knowing before re-discoveri
   height; re-measure rather than assume the constant carries to a different window chrome/DPI).
   This technique — log the CSS rect, add the chrome offset, then click — is the reusable fix for
   any future precise click-targeting inside an Electron/Chromium window from outside the process.
+- **`electron-builder` cannot cross-build the NSIS (Windows) target from WSL/Linux** without
+  `wine` installed — it needs `wine` to run `rcedit` (a Windows PE-metadata editor) even when no
+  code-signing certificate is configured. Confirmed live: building from WSL got through packaging
+  and downloading, then failed at `⨯ wine is required`. Ran it from the Windows side instead (same
+  local-path-then-robocopy pattern as every other native devDependency), passing an **absolute UNC
+  `--project` path while keeping PowerShell's own location on a normal local drive** — this avoids
+  `Set-Location`'s inability to `cd` into a raw UNC path without `New-PSDrive` at all, since the
+  tool only needs that path as an argument, not as its process cwd.
+- **`electron-builder`'s bundled `winCodeSign` helper package fails to extract on Windows** with
+  "Cannot create symbolic link" (`O cliente não tem o privilégio necessário`) for files under its
+  `darwin/` subfolder — an unprivileged Windows account lacks `SeCreateSymbolicLinkPrivilege`, and
+  that subfolder's real macOS-signing symlinks need it just to extract, even though nothing in a
+  Windows-only NSIS build ever reads that subfolder. Fix: extract the same `winCodeSign-x.x.x.7z`
+  on the WSL/Linux side instead (symlink creation isn't privileged there), then `robocopy`
+  everything **except** `darwin/` into
+  `%LOCALAPPDATA%\electron-builder\Cache\winCodeSign\winCodeSign-<version>\` ahead of the real
+  build — electron-builder finds the pre-seeded cache and skips its own download/extract entirely.
+- **7-Zip's NSIS packaging step can report a false "Duplicate filename on disk"** for two
+  genuinely different, legitimately co-existing files that merely differ by case (hit with
+  `mime@2.x`'s real `mime.js` + `Mime.js` pair, pulled in transitively via `nut-js` → `jimp` →
+  `mime`) — but only reproduced when the build's **output directory** lived on the
+  `\\wsl.localhost\...` bridge; a real local Windows path for `directories.output` (e.g.
+  `C:\<scratch-dir>`) built the exact same input tree with no error. Likely a case-folding quirk
+  of the 9P/UNC redirector's own directory listing, not a real collision — if a future NSIS/7-Zip
+  packaging step reports a "duplicate" that looks like a legitimate case-variant pair, check
+  whether the output path is UNC-backed before assuming the source package is actually broken.
 
 ## Conventions
 

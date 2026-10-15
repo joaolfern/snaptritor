@@ -1,0 +1,53 @@
+# T013: NSIS installer (RF11, RF12, RF18). asar disabled deliberately -- this app is small, has
+# no reason to hide its source, and asar's virtual filesystem is one more thing that could behave
+# unexpectedly given how many genuinely machine-specific quirks this Electron app has already
+# turned up (see CLAUDE.md); plain files on disk are easier to inspect if something goes wrong.
+appId: com.nosnocabo.snaptritor
+productName: Snaptritor
+asar: false
+directories:
+  # A real local Windows path, not the repo's own UNC-mounted location: 7-Zip's directory scan
+  # during NSIS packaging reported a false "duplicate filename on disk" for mime@2.x's genuinely
+  # distinct mime.js/Mime.js pair (a real, long-shipping package layout, not an actual collision)
+  # when its output tree lived on the \\wsl.localhost\... bridge -- see CLAUDE.md.
+  output: C:/snaptritor-dist-installer
+files:
+  - dist/main.js
+  - dist/preload.cjs
+  - dist/status.html
+  - package.json
+extraResources:
+  # The Electron UI (above) and the headless --inspect task (below) are packaged side by side but
+  # run under two different Node runtimes -- see plan.md's "Rejected alternatives" for why
+  # ELECTRON_RUN_AS_NODE wasn't used instead (nut-js's native bindings are built against system
+  # Node's ABI, not Electron's bundled one).
+  - from: vendor/node.exe
+    to: packages/collector/native/node.exe
+  - from: cli.ts
+    to: packages/collector/native/cli.ts
+  - from: src
+    to: packages/collector/native/src
+  - from: scripts/postinstall.ts
+    to: packages/collector/native/scripts/postinstall.ts
+  - from: node_modules
+    to: packages/collector/native/node_modules
+    filter:
+      - "**/*"
+      - "!typescript"
+      - "!typescript/**"
+      - "!@types"
+      - "!@types/**"
+      - "!electron"
+      - "!electron/**"
+  - from: ../src/state.ts
+    to: packages/collector/src/state.ts
+  - from: ../../shared/src
+    to: packages/shared/src
+  - from: ../../shared/node_modules/zod
+    to: packages/shared/node_modules/zod
+win:
+  target: nsis
+nsis:
+  oneClick: true
+  perMachine: false
+  include: installer/installer.nsh

@@ -13,10 +13,10 @@
  * — there is no shared compile-time check across this boundary.
  */
 import { app, BrowserWindow, ipcMain } from "electron";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 // Chromium's GPU process crashes fatally on this machine with zero flags (confirmed live: "GPU
 // process isn't usable. Goodbye", app exits) — these two avoid that. A *separate* problem (window
@@ -45,7 +45,12 @@ const INITIAL_STATE: State = {
   collectorSecret: null,
 };
 
-const STATE_PATH = process.env.SNAPTRITOR_STATE_PATH ?? join(app.getPath("userData"), "state.json");
+// "appData" (plain %APPDATA%), not "userData" (%APPDATA%\<app name>): Electron derives the app
+// name from package.json's "name" field ("snaptritor-collector-native"), which would silently
+// diverge from the literal "%APPDATA%\Snaptritor\state.json" path T013's installer registers the
+// headless Scheduled Task against. Resolving explicitly to the same literal "Snaptritor" folder
+// here means both sides agree by construction, independent of any package.json renaming later.
+const STATE_PATH = process.env.SNAPTRITOR_STATE_PATH ?? join(app.getPath("appData"), "Snaptritor", "state.json");
 const WORKER_URL = process.env.SNAPTRITOR_WORKER_URL ?? "https://snaptritor-worker.example.workers.dev";
 const TASK_NAME = "SnaptritorInspection";
 
@@ -55,6 +60,10 @@ function readState(): State {
 }
 
 function writeState(state: State): void {
+  // Unlike Electron's auto-created "userData" dir, the explicit appData/Snaptritor path above
+  // isn't guaranteed to exist yet (e.g. a dev run with no installer-created folder) — the
+  // installer creates it before this ever runs in production, but this stays correct either way.
+  mkdirSync(dirname(STATE_PATH), { recursive: true });
   writeFileSync(STATE_PATH, JSON.stringify(state, null, 2), "utf8");
 }
 

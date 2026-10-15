@@ -415,19 +415,65 @@ No orphans: every task below cites at least one requirement it serves.
 
 ### T013 — `packages/collector`: Windows installer
 
-- **Serves:** RF11
-- **Files:** `packages/collector/electron-builder.yml`, `packages/collector/package.json` (build
-  script added)
-- **Do:** `electron-builder` configured for an NSIS target. The install step (NSIS custom script or
-  a post-install hook invoking T011's registration) creates the Scheduled Task and writes the
-  initial `state.json`, so first run needs nothing from the player beyond running the installer —
-  and then, per T012, entering the pairing code shown on their phone (RF18's one deliberate
-  exception to "nothing to configure").
-- **Verify:** Via interop: `powershell.exe -Command "cd ...\collector; npm run build:installer"`
-  produces `dist/Snaptritor Setup <version>.exe` with a non-zero size. Actually running the
-  installer end to end on a clean account is not exercised by this task (no clean test account
-  available) — note that residual risk rather than claim it's covered.
-- **Status:** `[ ]`
+- **Serves:** RF11, RF12, RF18
+- **Files:** `packages/collector/native/electron-builder.yml`,
+  `packages/collector/native/installer/installer.nsh`,
+  `packages/collector/native/scripts/postinstall.ts`,
+  `packages/collector/native/scripts/fetch-portable-node.mjs`,
+  `packages/collector/native/package.json` (build scripts added)
+- **Do:** `electron-builder` configured for an NSIS target. A custom NSIS `customInstall` macro
+  invokes `postinstall.ts` (via a bundled portable Node runtime, not the dev machine's own system
+  Node, never Electron's — see plan.md's packaging decision), which reuses T011's
+  `registerInspectionTask` directly to create the Scheduled Task and writes the initial
+  `state.json`, so first run needs nothing from the player beyond running the installer — and
+  then, per T012, entering the pairing code shown on their phone (RF18's one deliberate exception
+  to "nothing to configure"). `customUnInstall` reuses T011's `unregisterTask` the same way.
+- **Verify:** Via interop: `npm run build:installer` (invoked directly, not through `npm run` —
+  see the finding below) produces `Snaptritor Setup <version>.exe` with a non-zero size. Actually
+  running the installer end to end on a clean account is not exercised by this task (no clean test
+  account available) — note that residual risk rather than claim it's covered.
+- **Status:** `[x]` — built and verified for real, in stages:
+  - **Runtime decision (plan.md):** the headless `--inspect` task and the Electron UI need
+    different Node runtimes (nut-js's native bindings are built against system Node's ABI, not
+    Electron's bundled one) — the installer bundles a portable Node 25.6.1 (fetched at build time
+    by `fetch-portable-node.mjs`, pinned to the exact version already proven against nut-js) rather
+    than using `ELECTRON_RUN_AS_NODE`.
+  - **Real correctness gap found and fixed before this task could even be verified:** `cli.ts` was
+    reading `collectorSecret` only from an env var (dev placeholder), never from the paired
+    `state.json` T012's status window actually writes — meaning every real scheduled run would
+    have silently sent the wrong secret. Fixed and verified live separately (own commit) before
+    building the installer around it.
+  - **extraResources mirrors the repo's own `packages/collector` and `packages/shared` relative
+    layout** so `cli.ts`/`postinstall.ts`/`inspect.ts`'s existing relative imports resolve with
+    zero rewriting inside the packaged app.
+  - **`npm run` itself hits the same UNC wall as `npm install`'s postinstall scripts** (confirmed
+    live, added to CLAUDE.md) — `build:installer` must be invoked via its two underlying commands
+    directly when running over the WSL/UNC interop bridge; the script is still correct for a real
+    local install.
+  - **electron-builder cross-building the NSIS target directly from WSL/Linux failed** needing
+    `wine` (for `rcedit`-based `.exe` metadata editing) — ran it from the Windows side instead,
+    installed via the same local-path-then-robocopy pattern as every other native dependency.
+  - **electron-builder's bundled `winCodeSign` package failed to extract on Windows** with "Cannot
+    create symbolic link" (`O cliente não tem o privilégio necessário`) — the archive's `darwin/`
+    subfolder contains real symlinks that an unprivileged Windows account can't recreate, even
+    though nothing Windows-targeted needs that subfolder. Fixed by extracting the same archive on
+    the WSL/Linux side (where symlinks aren't privileged) and robocopying everything except
+    `darwin/` into `%LOCALAPPDATA%\electron-builder\Cache\winCodeSign\winCodeSign-2.6.0\` ahead of
+    the real build.
+  - **7-Zip's NSIS packaging step failed with a false "Duplicate filename on disk" for
+    `mime@2.6.0`'s genuinely distinct `mime.js`/`Mime.js` pair** (a real, long-shipping package
+    layout, not an actual collision) — but only when the build's output tree lived on the
+    `\\wsl.localhost\...` bridge. Fixed by pointing `directories.output` at a real local Windows
+    path (`C:\snaptritor-dist-installer`) instead of a repo-relative one; built clean afterward.
+  - **End-to-end verified for real** (not just "the build succeeded"): ran the packaged
+    `postinstall.ts` via the packaged `node.exe` exactly as `customInstall` would, confirmed via
+    `Get-ScheduledTask` that it registered a real `SnaptritorInspection` task (`State: Ready`) and
+    wrote a real initial `state.json`; then ran it again with `--uninstall` and confirmed via
+    `Get-ScheduledTask` that the task was gone. All scratch state (the built installer, the test
+    Scheduled Task, the scratch `electron-builder` install) cleaned up afterward.
+  - Residual risk, as originally noted: the installer's actual NSIS wizard flow (clicking through
+    the installer UI itself as a player would) was not run on a clean account — only the packaged
+    resources and the `customInstall`/`customUnInstall` logic they invoke were verified directly.
 
 ### T014 — `packages/client`: service worker `[parallel-safe with T015]`
 
