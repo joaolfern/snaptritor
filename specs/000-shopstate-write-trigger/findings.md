@@ -24,7 +24,29 @@ least the last session recorded in this baseline.
 
 ## E1 — menu-only session
 
-*Pending — needs the user to launch the game to the main menu only, then quit, per `tasks.md` T003.*
+Session: launched the game, stayed on the main menu, **no navigation performed**, quit cleanly.
+Confirmed closed via `tasklist.exe` before snapshotting.
+
+| Value | Before | After | Moved? |
+| --- | --- | --- | --- |
+| `ShopState.json` file mtime | `2026-05-14T01:34:36.224Z` | `2026-05-14T01:34:36.224Z` | **No** |
+| `CardShopModuleLog.TimeUpdated` | `2026-05-14T01:30:10.878Z` | `2026-05-14T01:30:10.878Z` | **No** |
+| `ShopState.json` content hash | — | — | **Unchanged** (`diff baseline e1-menu-only` reports identical) |
+
+The session is confirmed real — the diff shows 12 other files changed in `States/nvprod/`
+(`AccountState.json`, `AnalyticState.json`, `BattlePassClientState.json`,
+`BrazeSdkManagerState.json`, `CharacterMasteryState.json`, `ClanState.json`,
+`CollectionState.json`, `CustomGameManagerState.json`, `GameState.json`, `SchemaState.json`,
+`ShopClientState.json`, `TimeClientState.json`) — but `ShopState.json` is byte-for-byte identical
+to the baseline, not even its mtime moved.
+
+**This settles S02: launching the game to the menu, with no shop navigation, does not refresh
+`ShopState.json`.** Verdict A (refreshes on its own) is ruled out. The remaining question is
+whether launch alone is enough with more time, or whether the Shop screen specifically must be
+opened (verdict B vs C) — that is E2/E3, `tasks.md` T005–T006.
+
+`ShopClientState.json` changed in this session despite no shop visit — worth a closer look under
+S05 (T007), since it is the one shop-adjacent file that moved without the shop being opened.
 
 ## E2 / E3 — shop-opened session
 

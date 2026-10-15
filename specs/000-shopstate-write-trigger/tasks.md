@@ -58,7 +58,7 @@ No orphans: every task above serves a listed requirement.
   Shop, and quit cleanly. Tell them when to start and wait for confirmation that the game has fully
   exited.
 - **Verify:** The user confirms. Note the start and end times in `findings.md`.
-- **Status:** `[ ]`
+- **Status:** `[x]` — user confirmed: launched, stayed on main menu, no navigation, quit cleanly.
 
 ### T004 — Observe after the menu-only session
 
@@ -69,7 +69,9 @@ No orphans: every task above serves a listed requirement.
   and `TimeUpdated` moved.
 - **Verify:** `findings.md` states before/after for both values and a yes/no on whether it changed.
   If it changed, verdict **A or B** is live and T005 confirms which.
-- **Status:** `[ ]`
+- **Status:** `[x]` — unchanged. `ShopState.json` mtime and `TimeUpdated` identical to baseline;
+  content hash identical. 12 other state files did change, confirming the session was real.
+  Verdict A ruled out. See `findings.md`.
 
 ### T005 — Checkpoint: shop-opened session (needs the user)
 
