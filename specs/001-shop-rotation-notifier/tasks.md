@@ -38,7 +38,8 @@ No orphans: every task below cites at least one requirement it serves.
 
 - **Serves:** RF04, RF06, RF08, Article 5, NF02
 - **Files:** `packages/shared/package.json`, `packages/shared/src/schemas.ts`,
-  `packages/shared/src/imageHash.ts`, `packages/shared/src/imageHash.test.ts` (all new)
+  `packages/shared/src/imageHash.ts`, `packages/shared/src/index.ts`,
+  `packages/shared/src/imageHash.test.ts`, `packages/shared/src/schemas.test.ts` (all new)
 - **Do:** Create the workspace package. `schemas.ts` exports the three Zod schemas from
   `plan.md`'s Data contracts section verbatim: `InspectionSubmission`, `PushSubscriptionRecord`,
   `CollectorState`. `imageHash.ts` exports a pure `perceptualHash(pixels: Uint8ClampedArray, width:
@@ -49,7 +50,8 @@ No orphans: every task below cites at least one requirement it serves.
   images hash within a small Hamming distance of each other; two very different synthetic images
   hash far apart; `CollectorState.parse({})` fails (fields are required or explicitly `.nullable()`,
   never silently defaulted). Exits 0 with all assertions passing.
-- **Status:** `[ ]`
+- **Status:** `[x]` — `pnpm --filter @snaptritor/shared test`: 13/13 passed (8 schema tests +
+  5 hash tests); `typecheck`: clean.
 
 ### T002 — `packages/collector`: state persistence and pure scheduling/pause logic
 
@@ -65,7 +67,9 @@ No orphans: every task below cites at least one requirement it serves.
   flag, `recordError` sets `lastError` without touching unrelated fields, and a round-trip
   `writeState` → `readState` returns an equal object (using a temp file under the OS tmp dir, Node
   `os.tmpdir()` — not the repo, not game files).
-- **Status:** `[ ]`
+- **Status:** `[x]` — `pnpm --filter @snaptritor/collector test`: 7/7 passed; `typecheck`: clean.
+  (Added `recordInspection` beyond the task's literal list — the natural counterpart to
+  `recordError` that T010 needs for a successful run; same file, same pure-function shape.)
 
 ### T003 — `packages/worker`: scaffold and `POST /subscriptions`
 
