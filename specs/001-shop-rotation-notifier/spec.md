@@ -1,10 +1,11 @@
 # Spec: Shop rotation notifier
 
 - **ID:** `001-shop-rotation-notifier`
-- **Status:** draft — rewritten 2026-10-15 after feature `000` concluded with a pivot: the
+- **Status:** ready — rewritten 2026-10-15 after feature `000` concluded with a pivot: the
   collector now captures a screenshot of the shop instead of reading `ShopState.json`'s card data
   (see `specs/000-shopstate-write-trigger/findings.md`). RF02–RF04 and RF09 reflect that pivot.
-  Delivery requirements (RF11–RF15, added the same day) are unaffected either way.
+  Delivery requirements (RF11–RF15, added the same day) are unaffected either way. Remaining open
+  questions (Q02, Q03, Q06–Q08) are all plan-level — none block writing `plan.md`.
 - **Source:** the shared doc [Notificador de Loja do Marvel Snap](https://claude.ai/code/artifact/8f3c8a0e-8be1-4cd6-804b-536abe9155b2),
   requirements RF01–RF10. Requirement IDs are kept identical to the doc's so the two stay comparable.
 
@@ -136,13 +137,13 @@ only the screen itself, once the shop is on it.
 | --- | --- | --- | --- |
 | Q01 | ~~What must happen for the state file to refresh?~~ Resolved by feature `000`: nothing makes it refresh under normal play; the collector must bring the Shop → Cards screen into view itself, every run, by simulated input (RF02). | — | resolved |
 | Q02 | How often should collection run, and at which offsets from the 8-hour reset? `ShopState.json`'s `NextRefresh` no longer informs scheduling (it is stale and unused); is a fixed 3×/day schedule enough, or should the real rotation boundary be learned some other way? | RF01's schedule | user |
-| Q07 | How should the collector reliably get from "game launched" to "Shop → Cards is visibly loaded"? The menu/shop navigation path, how to detect the screen has actually finished loading versus still spinning, and what to do if automation fails (retry, skip the run, alert) are all plan-level, but worth flagging now since RF02 depends entirely on this working. | RF02 | me, at plan time |
-| Q08 | How is the screenshot compared for RF04 — exact pixel/hash match, or a tolerance for cosmetic noise (animations, a subtly different frame)? Too strict and harmless noise causes false "changed" notifications; too loose and a real rotation might be missed. | RF04 | me, at plan time |
+| Q07 | ~~How should the collector reliably get from "game launched" to "Shop → Cards is visibly loaded"?~~ Approach chosen in `plan.md`: simulated clicks proportional to the game window's own rect (not absolute screen coordinates), confirmed loaded by polling a visual landmark with a timeout rather than a fixed delay. Exact landmark and click coordinates are tuned during `/implement` against the real game, not decided here. | RF02 | resolved — tuning at `/implement` |
+| Q08 | ~~How is the screenshot compared for RF04?~~ Approach chosen in `plan.md`: a perceptual hash with a tunable Hamming-distance threshold, stored in `CollectorState` so it can be adjusted without reinstalling. The actual threshold is tuned during `/implement` against real captures. | RF04 | resolved — tuning at `/implement` |
 | Q09 | ~~Does the notification carry the image directly, or a link to it?~~ Resolved: the push payload carries a URL; the notification's `image` option fetches and renders it inline (standard, long-supported platform behaviour — not a real unknown). Still open for `plan.md`: where that URL is hosted — Cloudflare R2 alongside KV/D1 is the obvious free-tier fit, but worth confirming against a real screenshot's file size. | RF07, RF09, NF08 | resolved; hosting choice at plan time |
-| Q03 | Does the motherboard and NIC support Wake-on-LAN, and is it enabled in BIOS? (doc item T06) | RF01 | user |
-| Q04 | Can Web Push with VAPID be sent from the chosen host's runtime, which has no built-in push service? (doc item T05) | RF07 | me, at plan time |
+| Q03 | `plan.md` picked OS self-wake over Wake-on-LAN (Q06), which narrows this: does the motherboard/firmware support RTC wake timers, and are they enabled in BIOS (sometimes disabled for ErP/battery compliance)? A much more commonly-supported feature than full NIC Wake-on-LAN, but still needs checking on the real machine. (doc item T06, narrowed) | RF01 | user |
+| Q04 | ~~Can Web Push with VAPID be sent from the chosen host's runtime?~~ Resolved: Cloudflare Workers implement the same `SubtleCrypto` Web Crypto API browsers do, which covers VAPID's ECDSA signing and the Web Push encryption (AES-GCM, HKDF) with no extra service. (doc item T05) | RF07 | resolved |
 | Q05 | ~~Where do card display names come from?~~ Moot — RF09 now shows the raw screenshot, not decoded names. | — | resolved |
-| Q06 | Now that the collector is a native Windows app, should PC wake use the OS's own wake-capable scheduled task (the app schedules itself to be woken, no external trigger needed) instead of an externally-sent Wake-on-LAN packet (which needs something else on the LAN to send it)? The self-wake route removes an unresolved piece of the old design — nothing in the original doc ever named what would send the packet. | RF01, RF15 | me, at plan time |
+| Q06 | ~~Should PC wake use OS self-wake instead of an externally-sent Wake-on-LAN packet?~~ Resolved in `plan.md`: self-wake, via the Scheduled Task's own "wake this computer" flag. Removes the undefined "who sends the packet" problem entirely; RF15's pause toggle disables that flag directly. | RF01, RF15 | resolved |
 
 ## Dependencies
 
