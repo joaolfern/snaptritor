@@ -85,7 +85,12 @@ No orphans: every task below cites at least one requirement it serves.
   Workers runtime locally, no deployment, no Windows needed) — a valid subscription POST returns
   `201` and a later KV read returns it unchanged; an invalid body (fails `PushSubscriptionRecord`)
   returns `400` and nothing is written.
-- **Status:** `[ ]`
+- **Status:** `[x]` — `pnpm --filter @snaptritor/worker test`: 4/4 passed (runs the real Workers
+  runtime via vitest-pool-workers, no deployment); `typecheck`: clean. Needed two fixes beyond
+  the task's literal description: `test/env.d.ts` to type `cloudflare:test`'s `env` against our
+  own `Env` interface, and a third `_ctx: ExecutionContext` parameter on `fetch` so its inferred
+  type matches `ExportedHandler`'s real signature under `satisfies` (which keeps the literal
+  function's arity rather than widening it).
 
 ### T004 — `packages/worker`: `POST /inspections` `[parallel-safe with T005, T006]`
 

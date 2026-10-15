@@ -1,0 +1,20 @@
+name = "snaptritor-worker"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# Real ids/names are created in T016 (Cloudflare account checkpoint). These placeholders are
+# enough for local dev and for @cloudflare/vitest-pool-workers, which simulates both locally
+# regardless of what's written here.
+kv_namespaces = [
+  { binding = "SUBSCRIPTIONS", id = "local-dev-placeholder" }
+]
+
+r2_buckets = [
+  { binding = "SHOP_IMAGES", bucket_name = "snaptritor-shop-images-dev" }
+]
+
+# Dev-only placeholder — never the real value. The real secret is set via
+# `wrangler secret put COLLECTOR_SECRET` at deploy time (T016), per constitution Article 8.
+[vars]
+COLLECTOR_SECRET = "dev-test-secret-change-me"
