@@ -6,8 +6,9 @@
 ; Electron's -- see plan.md's packaging decision) against postinstall.ts, which reuses T011's
 ; already-proven scheduler.ts directly.
 ;
-; WORKER_URL is a placeholder until T016 deploys a real Worker -- same placeholder used
-; throughout the rest of this codebase (cli.ts, main.ts) pending that checkpoint.
+; WORKER_URL is the real deployed Worker (T016, done 2026-10-15) -- same value used throughout
+; the rest of this codebase (cli.ts, main.ts) as the default when --worker-url/SNAPTRITOR_WORKER_URL
+; isn't given.
 
 ; extraResources preserves the repo's own packages/collector/native relative layout (see
 ; electron-builder.yml) so cli.ts, postinstall.ts, src/state.ts and shared/src/* all resolve their
@@ -16,7 +17,7 @@
 
 !macro customInstall
   CreateDirectory "$APPDATA\Snaptritor"
-  nsExec::ExecToLog '"${COLLECTOR_DIR}\node.exe" "${COLLECTOR_DIR}\scripts\postinstall.ts" --install --node-exe "${COLLECTOR_DIR}\node.exe" --cli "${COLLECTOR_DIR}\cli.ts" --state-path "$APPDATA\Snaptritor\state.json" --worker-url "https://snaptritor-worker.example.workers.dev"'
+  nsExec::ExecToLog '"${COLLECTOR_DIR}\node.exe" "${COLLECTOR_DIR}\scripts\postinstall.ts" --install --node-exe "${COLLECTOR_DIR}\node.exe" --cli "${COLLECTOR_DIR}\cli.ts" --state-path "$APPDATA\Snaptritor\state.json" --worker-url "https://snaptritor.nosnocabo.com.br"'
 !macroend
 
 !macro customUnInstall

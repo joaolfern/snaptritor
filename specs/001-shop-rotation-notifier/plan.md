@@ -98,6 +98,24 @@ Installer (electron-builder → NSIS .exe)                                    RF
                           (bundling its own separate Node 20.18) stays solely responsible for the
                           status window.
 
+                          Auto-update (RF19, added 2026-10-15): `electron-updater`, checking a
+                          public GitHub repo's Releases as its feed. Chosen over a generic-HTTP
+                          feed (e.g. pointing it at the existing R2 bucket) because GitHub Releases
+                          is `electron-updater`'s first-class, built-in provider — no per-release
+                          `latest.yml` to hand-maintain in sync with whatever's uploaded, which
+                          would just relocate the manual-release friction RF19 exists to remove.
+                          Requires actually pushing this repo to GitHub (done 2026-10-15, public —
+                          no secrets in the repo, Article 8 already enforced throughout, so public
+                          is the simpler choice: no token needs to be baked into the shipped app
+                          just to check for updates). The installer's own download (RF17) also
+                          moves to the GitHub Release asset instead of the R2 copy uploaded by
+                          hand during T016 — one artifact, one place, not two drifting copies.
+                          `main.ts` (the status window process, already running whenever the
+                          player might be looking) calls `autoUpdater.checkForUpdatesAndNotify()`
+                          on an interval; the headless `--inspect` process does not check itself,
+                          since it has no UI to prompt from and runs far more often than any
+                          plausible release cadence.
+
 packages/worker           Cloudflare Worker, TypeScript.                RF06, RF07, RF16–RF18
   POST /inspections        authed by a per-install secret issued at pairing (see RF18 below, not
                             a single global baked-in secret — see Rejected alternatives); validates
@@ -259,3 +277,9 @@ is stored — the collector's own `--inspect` logs that rejection into `Collecto
   already assumes same-origin) or a Pages Functions proxy layer whose only job would be forwarding
   to the Worker — pure indirection for no benefit here, since both pieces are small enough to ship
   from one deployment. `wrangler.toml`'s `[assets]` binding does this directly.
+- **`electron-updater`'s generic HTTP provider, pointed at the existing R2 bucket, instead of
+  GitHub Releases (RF19).** Avoids a GitHub repo, but needs a `latest.yml` manifest uploaded
+  alongside every release and kept byte-consistent with whatever `.exe`/`.blockmap` are actually in
+  R2 at that moment — a manual step with no built-in tooling to get it right, for a problem
+  (auto-update feed hosting) GitHub Releases already solves for free with `electron-updater`'s
+  first-class support.

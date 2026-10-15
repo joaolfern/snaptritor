@@ -86,6 +86,7 @@ only the screen itself, once the shop is on it.
 | RF16 | Show, on the client, whether a desktop collector is currently linked to this player's notification subscription. |
 | RF17 | Let the player download the Windows installer directly from the client. |
 | RF18 | Link the installed collector to the player's existing notification subscription automatically, with no code or manual step on either side, so RF16 reflects it. |
+| RF19 | Update the installed collector to a newer version automatically, without the player re-downloading or re-running the installer by hand. |
 
 ## Non-functional requirements
 
@@ -149,6 +150,11 @@ only the screen itself, once the shop is on it.
   collector on first run, then the client's "linked" status reflects it; given an expired or
   already-used code, then the collector reports that clearly rather than silently failing or
   claiming a stale link.
+- **RF19** — Given a newer version of the collector is published, when the installed collector next
+  checks, then it downloads and applies the update without the player visiting the client page or
+  running an installer again; a check that finds no newer version changes nothing and reports no
+  error. Added 2026-10-15, after a worker-URL fix required a manual reinstall to actually reach a
+  running install — exactly the friction this closes.
 
 ## Open questions
 

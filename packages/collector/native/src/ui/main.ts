@@ -51,7 +51,7 @@ const INITIAL_STATE: State = {
 // headless Scheduled Task against. Resolving explicitly to the same literal "Snaptritor" folder
 // here means both sides agree by construction, independent of any package.json renaming later.
 const STATE_PATH = process.env.SNAPTRITOR_STATE_PATH ?? join(app.getPath("appData"), "Snaptritor", "state.json");
-const WORKER_URL = process.env.SNAPTRITOR_WORKER_URL ?? "https://snaptritor-worker.example.workers.dev";
+const WORKER_URL = process.env.SNAPTRITOR_WORKER_URL ?? "https://snaptritor.nosnocabo.com.br";
 const TASK_NAME = "SnaptritorInspection";
 
 function readState(): State {

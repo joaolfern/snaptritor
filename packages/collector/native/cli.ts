@@ -19,7 +19,7 @@ if (!hasFlag("inspect")) {
   process.exit(1);
 }
 
-const workerUrl = flagValue("worker-url") ?? "https://snaptritor-worker.example.workers.dev";
+const workerUrl = flagValue("worker-url") ?? "https://snaptritor.nosnocabo.com.br";
 const statePath = flagValue("state-path") ?? "./snaptritor-state.json";
 
 // The real per-install secret lives in state.json, written there by T012's status window once
