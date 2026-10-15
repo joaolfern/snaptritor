@@ -38,6 +38,8 @@ export const CollectorState = z.object({
   wakeAutomationPaused: z.boolean(),
   lastImageHash: z.string().nullable(),
   lastError: z.string().nullable(),
+  /** Issued by `POST /pairing/claim` on first run (RF18). `null` means the pairing prompt shows. */
+  collectorSecret: z.string().nullable(),
 });
 export type CollectorState = z.infer<typeof CollectorState>;
 
@@ -49,4 +51,27 @@ export const INITIAL_COLLECTOR_STATE: CollectorState = {
   wakeAutomationPaused: false,
   lastImageHash: null,
   lastError: null,
+  collectorSecret: null,
 };
+
+/**
+ * RF16/RF18 — a short code the client requests right after subscribing (RF08), shown to the
+ * player, and consumed exactly once by the collector on first run.
+ */
+export const PairingCode = z.object({
+  code: z.string().length(6),
+  subscriptionEndpoint: z.string().url(),
+  createdAt: z.string().datetime(),
+  expiresAt: z.string().datetime(),
+  claimed: z.boolean(),
+});
+export type PairingCode = z.infer<typeof PairingCode>;
+
+/**
+ * What the collector gets back from a successful `POST /pairing/claim` — its own per-install
+ * secret (Article 8: never a secret shared across every install).
+ */
+export const PairingClaimResult = z.object({
+  collectorSecret: z.string(),
+});
+export type PairingClaimResult = z.infer<typeof PairingClaimResult>;

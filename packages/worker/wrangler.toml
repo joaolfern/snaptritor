@@ -17,8 +17,9 @@ r2_buckets = [
 # Dev-only placeholders — never real values. The real secrets are set via `wrangler secret put`
 # at deploy time (T016), per constitution Article 8. This VAPID keypair was generated once, only
 # to make local dev/test runs self-contained; it has never signed a real push and never will.
+# (COLLECTOR_SECRET removed 2026-10-15: superseded by RF18's per-install secrets, issued at
+# pairing-claim time and stored in KV — there is no longer a single global secret to configure.)
 [vars]
-COLLECTOR_SECRET = "dev-test-secret-change-me"
 VAPID_PUBLIC_KEY = "BKZVxGgNYO4q7y1F-XZuTvVDWOninE5UusSMCKFWpLA5zjfj6WL_2H2rnUbjZwKBf7TaDqZQs0y4ctjBWGpERps"
 VAPID_PRIVATE_KEY = "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgo_8OYUEKlvZSGvGe4Dki4d8f46GL25Dqy-ZiDKe14hyhRANCAASmVcRoDWDuKu8tRfl2bk71Q1jp4pxOVLrEjAihVqSwOc434-li_9h9q51G42cCgX-02g6mULNMuHLYwVhqREab"
 VAPID_SUBJECT = "mailto:dev-placeholder@example.com"

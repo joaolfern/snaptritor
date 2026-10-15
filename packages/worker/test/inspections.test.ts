@@ -1,8 +1,35 @@
 import { env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import worker from "../src/index.js";
 
-const SECRET = "dev-test-secret-change-me"; // matches wrangler.toml's dev placeholder
+// Gets a real, freshly-issued per-install secret by actually going through the pairing flow
+// (POST /pairing/code → POST /pairing/claim) rather than assuming any fixed value or internal KV
+// key format — the auth check this exercises no longer compares against a single configured
+// secret (RF18), so there is no fixed value to hardcode anymore.
+async function getPairedSecret(subscriptionEndpoint: string): Promise<string> {
+  const codeResponse = await worker.fetch(
+    new Request("http://worker.local/pairing/code", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ subscriptionEndpoint }),
+    }),
+    env,
+    {} as ExecutionContext,
+  );
+  const { code } = (await codeResponse.json()) as { code: string };
+
+  const claimResponse = await worker.fetch(
+    new Request("http://worker.local/pairing/claim", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code }),
+    }),
+    env,
+    {} as ExecutionContext,
+  );
+  const { collectorSecret } = (await claimResponse.json()) as { collectorSecret: string };
+  return collectorSecret;
+}
 
 function makeInspectionRequest(options: {
   secret?: string;
@@ -23,6 +50,12 @@ function makeInspectionRequest(options: {
   });
 }
 
+let SECRET: string;
+
+beforeEach(async () => {
+  SECRET = await getPairedSecret(`https://fcm.googleapis.com/fcm/send/test-${crypto.randomUUID()}`);
+});
+
 describe("POST /inspections", () => {
   it("rejects a missing/wrong secret with 401 and stores nothing", async () => {
     const response = await worker.fetch(
@@ -34,6 +67,18 @@ describe("POST /inspections", () => {
 
     const list = await env.SHOP_IMAGES.list();
     expect(list.objects).toHaveLength(0);
+  });
+
+  it("rejects the old single dev-placeholder secret — it was never issued through pairing", async () => {
+    const response = await worker.fetch(
+      makeInspectionRequest({
+        secret: "dev-test-secret-change-me",
+        metadata: { capturedAt: new Date().toISOString(), imageHash: "abc" },
+      }),
+      env,
+      {} as ExecutionContext,
+    );
+    expect(response.status).toBe(401);
   });
 
   it("rejects an invalid metadata part with 400", async () => {

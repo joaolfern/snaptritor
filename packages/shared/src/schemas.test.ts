@@ -3,6 +3,8 @@ import {
   CollectorState,
   INITIAL_COLLECTOR_STATE,
   InspectionSubmission,
+  PairingClaimResult,
+  PairingCode,
   PushSubscriptionRecord,
 } from "./schemas.js";
 
@@ -65,6 +67,45 @@ describe("PushSubscriptionRecord", () => {
       keys: { p256dh: "p256dh-key", auth: "auth-secret" },
       createdAt: new Date().toISOString(),
     });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("PairingCode", () => {
+  const now = new Date();
+  const soon = new Date(now.getTime() + 15 * 60 * 1000);
+
+  it("accepts a fresh, unclaimed code", () => {
+    const result = PairingCode.safeParse({
+      code: "ABC123",
+      subscriptionEndpoint: "https://fcm.googleapis.com/fcm/send/abc123",
+      createdAt: now.toISOString(),
+      expiresAt: soon.toISOString(),
+      claimed: false,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a code that isn't exactly 6 characters", () => {
+    const result = PairingCode.safeParse({
+      code: "ABC12",
+      subscriptionEndpoint: "https://fcm.googleapis.com/fcm/send/abc123",
+      createdAt: now.toISOString(),
+      expiresAt: soon.toISOString(),
+      claimed: false,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("PairingClaimResult", () => {
+  it("accepts an issued secret", () => {
+    const result = PairingClaimResult.safeParse({ collectorSecret: "a-fresh-per-install-secret" });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a missing secret", () => {
+    const result = PairingClaimResult.safeParse({});
     expect(result.success).toBe(false);
   });
 });

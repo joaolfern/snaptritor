@@ -1,5 +1,6 @@
 import { InspectionSubmission } from "@snaptritor/shared";
 import type { Env } from "./env.js";
+import { isValidCollectorSecret } from "./pairing.js";
 import { fanOutPush, importVapidKeys } from "./push.js";
 
 const LATEST_KEY = "inspection:latest";
@@ -26,8 +27,10 @@ function imageUrlFor(request: Request, imageKey: string): string {
  * `image` (the screenshot bytes) — so the image never has to be base64-inflated inside JSON.
  */
 export async function handlePostInspections(request: Request, env: Env): Promise<Response> {
-  const providedSecret = request.headers.get("X-Collector-Secret");
-  if (providedSecret !== env.COLLECTOR_SECRET) {
+  // Per-install secret, issued by POST /pairing/claim (RF18) — not a single secret shared across
+  // every install (constitution Article 8; see plan.md's Rejected alternatives).
+  const providedSecret = request.headers.get("X-Collector-Secret") ?? "";
+  if (!(await isValidCollectorSecret(env, providedSecret))) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
 

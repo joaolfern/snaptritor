@@ -1,5 +1,7 @@
+import { handleGetDownloadCollector } from "./download.js";
 import type { Env } from "./env.js";
 import { handleGetImage, handleGetLatestInspection, handlePostInspections } from "./inspections.js";
+import { handleGetCollectorStatus, handlePostPairingClaim, handlePostPairingCode } from "./pairing.js";
 import { handlePostSubscriptions } from "./subscriptions.js";
 
 export default {
@@ -21,6 +23,22 @@ export default {
     if (request.method === "GET" && url.pathname.startsWith("/images/")) {
       const imageKey = decodeURIComponent(url.pathname.slice("/images/".length));
       return handleGetImage(env, imageKey);
+    }
+
+    if (request.method === "POST" && url.pathname === "/pairing/code") {
+      return handlePostPairingCode(request, env);
+    }
+
+    if (request.method === "POST" && url.pathname === "/pairing/claim") {
+      return handlePostPairingClaim(request, env);
+    }
+
+    if (request.method === "GET" && url.pathname === "/collector/status") {
+      return handleGetCollectorStatus(request, env);
+    }
+
+    if (request.method === "GET" && url.pathname === "/download/collector") {
+      return handleGetDownloadCollector(env);
     }
 
     return Response.json({ error: "not found" }, { status: 404 });

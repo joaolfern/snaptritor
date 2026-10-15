@@ -116,12 +116,13 @@ No orphans: every task below cites at least one requirement it serves.
   deployment decision, so the Worker serves its own images instead, keeping this task testable
   with zero Cloudflare account dependency.
 
-  **Superseded in part, 2026-10-15 (RF18):** the single baked-in `env.COLLECTOR_SECRET` this task
-  checks against is being replaced by a per-install secret issued at pairing time — a leaked
-  installer download link must not carry a credential valid for the whole deployment. The auth
-  check here needs to become "does this secret match *some* install's issued secret" instead of
-  "does it match the one global secret". Tracked as part of T019, not redone here — this task's
-  own tests and behavior are still correct for what RF05/RF06/NF06/NF08 ask, only the auth model
+  **Superseded in part, 2026-10-15 (RF18), resolved by T019:** the single baked-in
+  `env.COLLECTOR_SECRET` this task checked against was replaced by a per-install secret issued at
+  pairing time — a leaked installer download link must not carry a credential valid for the whole
+  deployment. The auth check is now "does this secret match *some* install's issued secret"
+  instead of "does it match the one global secret", and `COLLECTOR_SECRET` itself is gone from
+  `env.ts`/`wrangler.toml`. This task's own tests and behavior are still correct for what
+  RF05/RF06/NF06/NF08 ask, only the auth model
   underneath changes.
 
 ### T005 — `packages/worker`: VAPID Web Push fanout `[parallel-safe with T004, T006]`
@@ -511,4 +512,12 @@ No orphans: every task below cites at least one requirement it serves.
   rather than succeeding; `POST /inspections` with the newly-issued secret succeeds, with the old
   single dev-placeholder secret from `wrangler.toml`'s `[vars]` now rejected (`401`) since it was
   never issued through pairing.
-- **Status:** `[ ]`
+- **Status:** `[x]` — 28/28 worker tests pass (8 new in `pairing.test.ts`, 2 new in
+  `download.test.ts`, plus `inspections.test.ts`/`inspectionsLatest.test.ts` updated to obtain a
+  real secret through the actual pairing flow instead of a hardcoded placeholder, since there is
+  no longer a fixed secret to hardcode); `typecheck` clean. Added an explicit test for the exact
+  claim in this task's own Verify text — the old `dev-test-secret-change-me` placeholder is
+  rejected (`401`) — rather than leave it merely implied by the auth rewrite. `COLLECTOR_SECRET`
+  removed outright from `env.ts` and `wrangler.toml`'s `[vars]` (not just unused) once nothing
+  referenced it anymore. T004's flagged follow-up is done: `POST /inspections`'s auth is now the
+  per-install KV lookup, not the single equality check.
