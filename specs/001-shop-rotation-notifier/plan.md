@@ -131,8 +131,7 @@ is stored — the collector's own `--inspect` logs that rejection into `Collecto
 | --- | --- | --- | --- |
 | Electron | latest stable (33.x) | One TypeScript codebase for the installed app; `electron-builder` gives the NSIS `.exe` installer (RF11) for free. | Free, OSS |
 | electron-builder | latest | Builds the installer and registers app metadata Windows expects. | Free, OSS |
-| `@nut-tree/nut-js` | latest | Simulated mouse input + screen capture, actively maintained, TypeScript-first. | Free, OSS |
-| `node-window-manager` | latest | Finds the game's window by title, reads its rect, brings it to the foreground — needed so clicks are proportional to the window, not the screen. | Free, OSS |
+| `@nut-tree-fork/nut-js` | ^4.2.6 | Simulated mouse input, screen capture, *and* window-finding (`getWindows`) all in one dependency — verified during `/implement` (T007) that it covers window-finding by itself, so no separate window-management library is needed. Apache-2.0; the original `@nut-tree/nut-js` scope is abandoned (404s), this community fork is the actively maintained one. | Free, OSS |
 | zod | latest | The shared contract (Article 5). | Free, OSS |
 | Cloudflare Workers | — | Backend compute. | Free tier (well under its request volume at a few runs/day) |
 | Cloudflare KV | — | Subscription + inspection metadata. | Free tier |

@@ -150,21 +150,56 @@ No orphans: every task below cites at least one requirement it serves.
 ### T007 — `packages/collector`: Windows window-finder and screenshot capture
 
 - **Serves:** RF02 (partial — finding/foregrounding the window), RF03, NF05
-- **Files:** `packages/collector/src/windows/findWindow.ts`,
-  `packages/collector/src/windows/capture.ts`,
-  `packages/collector/scripts/smoke-capture.ts` (all new)
-- **Do:** `findWindow(titlePattern)` (via `node-window-manager`) returns the game window's handle
-  and client rect, or `null` — never throws on "not found", since `--inspect` needs to log that and
-  exit cleanly (NF06). `capture(rect)` (via `@nut-tree/nut-js`'s `screen` module) returns the pixel
-  buffer for a given rect. `smoke-capture.ts` is a tiny standalone script: find any window matching
-  a title substring given on the CLI, foreground it, capture it, and write a PNG to disk — proof the
-  native modules actually work on this machine, independent of the real game being installed.
+- **Files:** `packages/collector/native/package.json`,
+  `packages/collector/native/src/windows/findWindow.ts`,
+  `packages/collector/native/src/windows/capture.ts`,
+  `packages/collector/native/scripts/smoke-capture.ts` (all new — **relocated from
+  `packages/collector/src|scripts/` to `packages/collector/native/`**, see note below)
+- **Do:** `findWindow(titlePattern)` returns the game window's handle and client rect, or `null` —
+  never throws on "not found", since `--inspect` needs to log that and exit cleanly (NF06).
+  `capture(rect)` returns the pixel buffer for a given rect. `smoke-capture.ts` is a tiny standalone
+  script: find any window matching a title substring given on the CLI, foreground it, capture it,
+  and write a PNG to disk — proof the native modules actually work on this machine, independent of
+  the real game being installed.
 - **Verify:** Run for real via Windows' own Node (not WSL's) over the repo's UNC path:
-  `powershell.exe -Command "node \\wsl.localhost\Ubuntu\home\joaolfern\dev\snaptritor\packages\collector\scripts\smoke-capture.ts Notepad"`
+  `powershell.exe -Command "node \\wsl.localhost\Ubuntu\home\joaolfern\dev\snaptritor\packages\collector\native\scripts\smoke-capture.ts Notepad"`
   (with Notepad open) — prints the found window's rect and the saved PNG's path, and the PNG file
   exists with a non-zero size. Proves native window-finding + capture work from this exact
   environment before any game automation is attempted.
-- **Status:** `[ ]`
+- **Status:** `[x]` — ran for real. Four corrections to the plan along the way, each found by
+  running against the real runtime rather than trusting a source or a library's name from memory:
+  1. **`node-window-manager` dropped entirely.** It needs `node-gyp`/Visual Studio Build Tools to
+     compile (not installed, and installing a multi-GB toolchain unprompted would be a real system
+     change — asked first, see commit). `@nut-tree-fork/nut-js` alone covers window-finding
+     (`getWindows()`) *and* capture *and* input simulation via prebuilt binaries, so the dependency
+     is simply unnecessary.
+  2. **Package name:** `@nut-tree/nut-js` 404s — it's abandoned; the actively maintained package is
+     `@nut-tree-fork/nut-js` (Apache-2.0, free — the user asked directly, verified via registry
+     metadata before proceeding, per constitution Article 3).
+  3. **Install location:** native modules can't be `npm install`ed over the UNC path at all — their
+     postinstall scripts shell out via `cmd.exe`, which refuses a UNC working directory. Installed
+     into a real local Windows path instead, then `robocopy`'d the built `node_modules` onto the
+     repo (a plain file copy over UNC is fine; it's specifically `cmd.exe`-spawning build scripts
+     that aren't). This also forced relocating `findWindow.ts`/`capture.ts`/the smoke script from
+     `packages/collector/src` and `scripts/` into `packages/collector/native/`, since Node's module
+     resolution needs `node_modules` to be an ancestor of the importing file, not a sibling.
+  4. **API surface:** fetched the real docs (nutjs.dev) per the user's steer away from guessing off
+     source code, but the docs describe a `screen.capture(region?)` signature that doesn't match
+     what's actually installed — confirmed against the installed version's own `.d.ts` files, which
+     are authoritative for this exact version: `screen.grab()`/`grabRegion(region)` return an
+     in-memory `Image`; the real `saveImage()` takes one `{ image, path }` object, not two
+     positional args. Also: `windowWithTitle()` turned out to be a lazy query descriptor (for
+     `screen.find()`), not a resolvable `Window` instance — `getWindows()` + filtering by title is
+     the real way to get one.
+  5. **Caught by actually looking at the output, not just checking exit code 0:** the first
+     working-looking run silently captured the wrong window (VS Code, which happened to be on top
+     on screen) because `smoke-capture.ts` never called `focus()` before capturing — `findWindow`
+     finding a window's rect doesn't mean that window is what's visually on top of the screen at
+     that rect. Caught only by reading the saved PNG as an image and seeing VS Code instead of
+     Notepad; fixed by focusing before capture, with a short settle delay, then re-verified by
+     looking at the corrected PNG. A naive "file exists, non-zero size" check would have missed
+     this entirely and shipped a collector that silently photographs whatever's on top of the
+     screen, not the game.
 
 ### T008 — `packages/collector`: Windows simulated-click module
 

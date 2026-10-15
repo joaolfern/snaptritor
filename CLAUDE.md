@@ -82,6 +82,56 @@ wake the machine for a scheduled task, which may remove the need for an external
 Wake-on-LAN packet entirely (nothing in the original doc ever named what would send one). This is
 flagged as Open Question Q06 in the `001` spec rather than decided here.
 
+### Running and installing Windows-native code from here (validated — do not re-derive)
+
+This session (a Claude Code session running in WSL) can actually drive real Windows-native code,
+not just write it — useful, with real limits worth knowing before re-discovering them:
+
+- **Interop works, but quote your UNC paths carefully.** `powershell.exe -Command "..."` and
+  `cmd.exe /c "..."` both run from WSL. The repo is reachable from Windows at
+  `\\wsl.localhost\Ubuntu\home\joaolfern\dev\snaptritor`. Inside a *double-quoted bash* string,
+  each literal backslash you want PowerShell to see needs **two** backslashes in the bash source
+  (bash's own double-quote escaping eats one level) — so a UNC path's leading `\\` needs `\\\\` in
+  the bash command string. Get this wrong and PowerShell silently resolves to the wrong path rather
+  than erroring.
+- **PowerShell can't `Set-Location`/`cd` directly into a raw UNC path** ("Current directory cannot
+  be set" is the symptom, though it may also silently stay in its previous directory instead of
+  erroring — always echo `(Get-Location).Path` to confirm where a script actually ran). Map a
+  PSDrive first: `New-PSDrive -Name S -PSProvider FileSystem -Root '\\wsl.localhost\Ubuntu\...'
+  -Scope Global`, then `Set-Location S:\...` — and the drive only lives for that one
+  `powershell.exe` process, so map-and-use has to happen in the same invocation every time.
+  `cmd.exe`'s `pushd` (which normally auto-maps UNC paths) and `net use` both failed against
+  `wsl.localhost` specifically on this machine — PowerShell's own FileSystem provider is the
+  reliable path in.
+- **`npm install` cannot run from a UNC-backed directory at all** if the package has a native
+  postinstall/rebuild script. The script shells out via `cmd.exe`, which refuses a UNC working
+  directory outright — this breaks even though plain file reads/writes and `node some-script.ts`
+  over the same UNC path work fine. The fix: `npm install` into a real local Windows path (e.g.
+  `C:\Users\<user>\<scratch-dir>`), then `robocopy` the resulting `node_modules` onto the repo's
+  UNC path — a plain file copy isn't affected by the cmd.exe/UNC limitation, only build scripts are.
+- **A native module's `node_modules` must be an ancestor of whatever imports it.** Node's ESM
+  resolution walks up parent directories only — a sibling folder's `node_modules` is invisible.
+  This is why Windows-native automation code lives under `packages/collector/native/` as a
+  self-contained unit (own `package.json`, own `node_modules`) rather than inside
+  `packages/collector/src/`: `native/` is deliberately nested one level deeper than
+  `pnpm-workspace.yaml`'s `packages/*` glob matches, so a WSL-side `pnpm install` never touches it
+  and can't clobber its Windows-compiled bindings with Linux ones. Install/update it only via the
+  local-path-then-robocopy pattern above, never via the root `pnpm install`.
+- **Node 25.6.1 on Windows runs `.ts` files directly**, no build step — but unlike a bundler, it
+  does not resolve a `.js` import specifier to a sibling `.ts` file. Relative imports between these
+  native `.ts` files must use the literal `.ts` extension (`from "./capture.ts"`), not `.js`.
+- **A library's published docs can lag its actual installed version.** `nutjs.dev`'s examples
+  describe a `screen.capture(region?)` call that doesn't match `@nut-tree-fork/nut-js@4.2.6`'s real
+  API at all — confirmed by reading the installed package's own `.d.ts` files, which are
+  authoritative for whatever version is actually on disk. Check those before trusting fetched docs
+  when something doesn't typecheck or throws a confusing runtime error.
+- **A window's reported rect isn't necessarily what's visually on top of the screen there.**
+  `screen.grabRegion()` captures real screen pixels at a rect, regardless of which window the rect
+  belongs to — call `.focus()` on the found window (with a short settle delay) before capturing, or
+  the capture silently shows whatever else happens to be on top. Verify by actually looking at the
+  saved image (the `Read` tool displays PNGs), not just by checking the file exists and is
+  non-empty — that check alone passed while the captured content was still wrong.
+
 ## Conventions
 
 - Specs, code, comments and commit messages in English. The shared doc stays Portuguese.

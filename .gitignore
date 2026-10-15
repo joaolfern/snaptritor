@@ -21,6 +21,10 @@ build/
 specs/**/snapshots/
 *.snapshot.json
 
+# smoke-test output: screen captures of whatever happens to be on screen when run — never
+# meaningful to version, and could incidentally contain something personal
+packages/collector/native/*.png
+
 # os / editor
 .DS_Store
 Thumbs.db
