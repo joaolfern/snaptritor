@@ -11,7 +11,10 @@ against the repo's own UNC path) and, for T009, the real game. T016–T018 are c
 the user directly (a Cloudflare account, the physical PC's BIOS, an Android device). T019 (added
 2026-10-15, after T001–T011 were already built — the user's install-flow requirement) is
 WSL/Node-only like T001–T006; it lands out of numeric order because it follows from T014–T016's
-client/deployment work rather than the original build order.
+client/deployment work rather than the original build order. T020 (added 2026-10-15, after T016's
+deployment) needs the same WSL→Windows interop as T007–T013 for the installer build, plus a
+GitHub account/token for publishing — not a pure checkpoint like T016–T018, since most of it is
+real code, but it still needed the user to install/authorize the `gh` CLI once.
 
 ## Coverage check
 
@@ -35,6 +38,7 @@ client/deployment work rather than the original build order.
 | RF16 | T015, T019 |
 | RF17 | T015, T019 |
 | RF18 | T012, T013, T019 |
+| RF19 | T020 |
 
 No orphans: every task below cites at least one requirement it serves.
 
@@ -669,3 +673,54 @@ No orphans: every task below cites at least one requirement it serves.
   removed outright from `env.ts` and `wrangler.toml`'s `[vars]` (not just unused) once nothing
   referenced it anymore. T004's flagged follow-up is done: `POST /inspections`'s auth is now the
   per-install KV lookup, not the single equality check.
+
+### T020 — `packages/collector`/`packages/worker`: auto-update (RF19)
+
+- **Serves:** RF19 (added 2026-10-15, after a worker-URL fix needed a manual reinstall to reach
+  an already-installed collector — exactly the friction this closes)
+- **Files:** `packages/collector/native/package.json` (`electron-updater` dependency, version
+  bumped to `0.1.0`), `packages/collector/native/electron-builder.yml` (`publish` config, pinned
+  `artifactName`), `packages/collector/native/src/ui/main.ts` (`autoUpdater` wiring),
+  `packages/worker/src/download.ts` (rewritten: redirects to the GitHub Release asset instead of
+  proxying a hand-uploaded R2 copy), `packages/worker/test/download.test.ts` (rewritten for the
+  redirect)
+- **Do:** `electron-updater`'s `autoUpdater.checkForUpdatesAndNotify()`, called once at startup and
+  every 4 hours thereafter from `main.ts` (the status window process — the only one with a UI to
+  notify from; the far-more-frequent headless `--inspect` process doesn't check itself). Points at
+  a public GitHub repo (`joaolfern/snaptritor`, created and pushed as part of this task) via
+  `electron-builder.yml`'s `publish: { provider: github }`, which auto-generates `latest.yml`
+  alongside the installer and blockmap on every publish — no manifest to hand-maintain, unlike the
+  rejected generic-HTTP-feed alternative (see plan.md). `GET /download/collector` now redirects to
+  `github.com/joaolfern/snaptritor/releases/latest/download/snaptritor-setup.exe` — a stable URL
+  across versions because `artifactName` is pinned — instead of proxying R2, so there's exactly one
+  copy of the installer, not two that can drift.
+- **Verify:** `pnpm --filter worker test` passes with the rewritten redirect test;
+  `electron-builder build --win nsis --publish always` (with a `GH_TOKEN`) successfully creates and
+  uploads to a real GitHub Release; `curl -sL .../download/collector -o /dev/null -w
+  '%{http_code} %{size_download}'` returns `200` with the real installer's byte size, following the
+  full redirect chain. A genuine newer-version auto-update applying on a real already-installed
+  collector is not exercised by this task (would need two real published versions and time for an
+  actual background check to fire) — noted as residual risk rather than claimed.
+- **Status:** `[x]` — built and verified live:
+  - Created `gh` CLI access (not previously installed — installed and authenticated live by the
+    user via `! sudo apt-get install gh && gh auth login`, since this session has no sudo/GitHub
+    credentials of its own) and a new public GitHub repo, `joaolfern/snaptritor`, pushed for real.
+  - `electron-builder build --publish always` **creates the GitHub Release as a draft by
+    default** — confirmed live: the installer and `latest.yml` uploaded successfully (173 MB +
+    337 B, both `state: uploaded`), but `.../releases/latest/download/<name>` 404'd until the
+    release was explicitly un-drafted and marked latest (`gh release edit v0.1.0 --draft=false
+    --latest`). Electron-builder's own CLI output never mentions this; only inspecting the
+    release's real state (`gh release view --json isDraft`) revealed it.
+  - Confirmed the full redirect chain for real: `/download/collector` → GitHub's `/latest` tag
+    redirect → the tag's specific asset URL → a signed Azure blob storage URL → `200`, with the
+    downloaded byte count matching the uploaded asset's size exactly (173,285,174 bytes).
+  - Deleted the now-redundant R2 copy of the installer (`installer/snaptritor-setup.exe`) uploaded
+    by hand during T016 — GitHub Releases is now the single source for this artifact.
+  - Two unrelated real bugs found and fixed in the same pass, both from live user reports while
+    this work was in flight: the install-download link's `href` was only ever set inside the
+    pairing-code view (never ran before a successful subscribe, so clicking it did nothing before
+    subscribing — RF17 requires it to work regardless); and `cli.ts`/`main.ts`/`installer.nsh` still
+    defaulted to the pre-T016 placeholder Worker URL
+    (`snaptritor-worker.example.workers.dev`), so an already-installed collector's pairing claim
+    and its own Scheduled Task registration both silently pointed at a URL that was never real.
+    Both fixed and redeployed; see their own commits.

@@ -13,6 +13,7 @@
  * — there is no shared compile-time check across this boundary.
  */
 import { app, BrowserWindow, ipcMain } from "electron";
+import { autoUpdater } from "electron-updater";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -155,3 +156,25 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => app.quit());
+
+// RF19/T020: this status window is the only Electron process with a UI to notify from, and is
+// realistically running whenever the player might actually see a native "update ready" toast —
+// the far-more-frequent headless --inspect process has neither and does not check itself.
+// checkForUpdatesAndNotify() downloads silently and applies on the next quit+relaunch (standard
+// NSIS differential-update behavior); it needs a real published GitHub Release to find anything,
+// so this is a no-op (logged, not thrown) against a dev run with no publish config match.
+const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
+
+autoUpdater.on("error", (err) => console.error(`[autoUpdater] error: ${err.message}`));
+autoUpdater.on("update-available", (info) => console.log(`[autoUpdater] update available: ${info.version}`));
+autoUpdater.on("update-not-available", () => console.log("[autoUpdater] already on the latest version"));
+autoUpdater.on("update-downloaded", (info) =>
+  console.log(`[autoUpdater] update ${info.version} downloaded; applies on next restart`),
+);
+
+app.whenReady().then(() => {
+  autoUpdater.checkForUpdatesAndNotify().catch((err) => console.error(`[autoUpdater] check failed: ${err.message}`));
+  setInterval(() => {
+    autoUpdater.checkForUpdatesAndNotify().catch((err) => console.error(`[autoUpdater] check failed: ${err.message}`));
+  }, UPDATE_CHECK_INTERVAL_MS);
+});

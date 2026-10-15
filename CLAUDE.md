@@ -302,6 +302,18 @@ not just write it — useful, with real limits worth knowing before re-discoveri
   existing `fetch` handler otherwise. `index.html` and `manifest.webmanifest` live at the client
   package root (not emitted by `tsc`), so the client's own `build` script copies them into `dist/`
   alongside the compiled JS — don't `tsc`-only build and expect the static page to be there.
+- **A curl `HEAD` request against any Worker route in this codebase returns the generic JSON 404**,
+  even for a route that works fine on `GET` — `index.ts`'s router only matches an exact
+  `request.method === "GET"`/`"POST"`, with no `HEAD` case at all, so it silently falls through to
+  the catch-all. Caused two false alarms this session (a route that looked broken via `curl -I` was
+  actually fine on a plain `curl`) — always re-check with a real `GET` before concluding a route is
+  down.
+- **`electron-builder build --publish always` creates the GitHub Release as a draft by default.**
+  Confirmed live: the installer and `latest.yml` uploaded successfully (`state: uploaded` on both),
+  but `.../releases/latest/download/<name>` kept 404ing until the release was explicitly
+  un-drafted and marked latest — `gh release edit <tag> --draft=false --latest`. Nothing in
+  electron-builder's own CLI output mentions this; only `gh release view --json isDraft` revealed
+  it. Check this after every publish, not just that the upload step logged success.
 
 ## Conventions
 

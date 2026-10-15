@@ -51,3 +51,16 @@ nsis:
   oneClick: true
   perMachine: false
   include: installer/installer.nsh
+  # Fixed, version-independent filename: GitHub's stable "latest release" asset-download URL
+  # (.../releases/latest/download/<name>) needs the exact same asset name across every release,
+  # not the default "${productName} Setup ${version}.exe" (which would change the URL on every
+  # bump and break the Worker's redirect target).
+  artifactName: snaptritor-setup.exe
+# RF19/T020: electron-updater's feed. GitHub Releases over a generic HTTP host (e.g. the existing
+# R2 bucket) specifically because it's electron-updater's first-class provider -- publishing here
+# auto-generates and uploads latest.yml alongside the installer/blockmap, instead of needing that
+# kept in sync by hand on every release (see plan.md's rejected alternatives).
+publish:
+  provider: github
+  owner: joaolfern
+  repo: snaptritor

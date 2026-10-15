@@ -38,7 +38,7 @@ export default {
     }
 
     if (request.method === "GET" && url.pathname === "/download/collector") {
-      return handleGetDownloadCollector(env);
+      return handleGetDownloadCollector();
     }
 
     // RF08 needs this to subscribe at all: pushManager.subscribe() requires the VAPID public key

@@ -1,13 +1,14 @@
 {
   "name": "snaptritor-collector-native",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "dist/main.js",
   "description": "Windows-only native automation (window-finding, screen capture, simulated input) and the Electron status window. Installed and run exclusively via Windows' own npm/node (over the repo's UNC path), never via WSL's pnpm -- see CLAUDE.md. Deliberately NOT a pnpm-workspace member: packages/collector/native is nested a level deeper than pnpm-workspace.yaml's 'packages/*' glob matches, so a WSL-side pnpm install never touches it and can't overwrite its Windows-compiled native bindings with Linux ones.",
   "author": "elcharmando",
   "dependencies": {
-    "@nut-tree-fork/nut-js": "^4.2.6"
+    "@nut-tree-fork/nut-js": "^4.2.6",
+    "electron-updater": "^6.3.9"
   },
   "devDependencies": {
     "typescript": "^5.6.3",
