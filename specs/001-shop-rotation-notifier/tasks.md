@@ -630,19 +630,26 @@ No orphans: every task below cites at least one requirement it serves.
 - **Verify:** The user confirms wake timers are enabled (or what they found), and states the
   cadence they want; the installer's registration is updated with the real times if they differ
   from the placeholder used during T011's own testing.
-- **Status:** `[~]` — Q02 resolved by the user (2026-10-15): the shop's real daily reset is 19:00
-  UTC (16:00 BRT), with featured/spotlight rotating every 8h from that same anchor — boundaries at
-  16:00/00:00/08:00 BRT, not the earlier arbitrary 03:10/11:10/19:10 placeholder (which was just
-  evenly spaced for T011's own smoke test, never actually anchored to the real reset).
-  `DEFAULT_DAILY_TIMES` updated to `["00:10", "08:10", "16:10"]` and republished (v0.3.0). **Not
-  yet `[x]`: Q03 (BIOS/firmware wake-timer support) is still unanswered** — without it, RF01's
-  "the PC wakes itself" premise is unverified; the Scheduled Task is registered wake-capable
-  (`WakeToRun: true`, confirmed live in T011) but that only matters if the firmware actually
-  honors it. Also: **auto-update (T020) does not re-register the Scheduled Task** — NSIS's
-  `customInstall` macro only runs on a real install, not a differential auto-update, so an
-  already-installed collector with the old cadence baked in needs one more manual reinstall to
-  pick up these corrected times; a later improvement could have `main.ts` re-run the registration
-  on every startup instead, flagged here rather than built under today's time pressure.
+- **Status:** `[x]` — both open questions resolved by the user (2026-10-15):
+  - **Q02 (cadence):** the shop's real daily reset is 19:00 UTC (16:00 BRT), with
+    featured/spotlight rotating every 8h from that same anchor — boundaries at 16:00/00:00/08:00
+    BRT, not the earlier arbitrary `03:10/11:10/19:10` placeholder (which was just evenly spaced
+    for T011's own smoke test, never actually anchored to the real reset). `DEFAULT_DAILY_TIMES`
+    updated to `["00:10", "08:10", "16:10"]`, verified by registering the task from the real built
+    installer and reading back its actual `StartBoundary` times via `Get-ScheduledTask`, and
+    republished (v0.3.0).
+  - **Q03 (BIOS wake-timer support):** confirmed live on the real machine (ASUS TUF Gaming
+    B550M-PLUS, UEFI 2.20.1271), via a screenshot of Advanced → APM Configuration — "Power On By
+    RTC" is `Enabled` and "ErP Ready" is `Disabled` (ErP compliance mode silently disables
+    deep-wake features when left on, so this specifically needed checking, not assuming). The
+    BIOS's own RTC Alarm Date/Hour/Minute/Second fields are a separate, unrelated fixed-wake-time
+    feature — correctly left untouched, since Windows' own Task Scheduler programs its wake timer
+    dynamically (`WakeToRun: true`, already confirmed live in T011).
+  - Residual, noted rather than built under today's time pressure: **auto-update (T020) does not
+    re-register the Scheduled Task** — NSIS's `customInstall` macro only runs on a real install,
+    not a differential auto-update — so an already-installed collector with an older cadence
+    baked in needs one more manual reinstall to pick it up; a later improvement could have
+    `main.ts` re-run the registration on every startup instead.
 
 ### T019 — `packages/worker`: pairing endpoints, and per-install secrets
 
