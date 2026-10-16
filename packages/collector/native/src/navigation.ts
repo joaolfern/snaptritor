@@ -55,11 +55,14 @@ export const NAVIGATE_TO_DAILY_CARDS: NavigationStep[] = [
  * captures. Covers the "Daily Cards" heading, the rotation countdown, and all five card tiles
  * (the three daily-rotating slots plus the Ultimate/Spotlight variant slots below them).
  */
+// Re-measured 2026-10-16 from a live capture: the 3rd sub-tab is now "Collector's Packs", with the
+// Daily Cards section below it (heading at y≈740, card labels ending y≈1060 of 1080). The old
+// region also took in the Collector's Packs block above, which isn't the rotation.
 export const DAILY_CARDS_REGION = {
-  leftFraction: 0.375,
-  topFraction: 0.2,
-  widthFraction: 0.255,
-  heightFraction: 0.75,
+  leftFraction: 0.37,
+  topFraction: 0.655,
+  widthFraction: 0.27,
+  heightFraction: 0.335,
 };
 
 /**

@@ -819,3 +819,16 @@ it...") — the collector has never been designed or built to launch it. The gam
 (launch + wait-for-load timing, unverified) versus the current zero-code alternative (the player
 leaves the game running before the PC sleeps, so it survives into the scheduled wake) — a real
 product decision, not something to build silently under time pressure.
+
+**RF02 corrected and shipped, 2026-10-16 (v0.3.3):** the "still open" question above is resolved
+by the user — the scope was always "wake the PC, get the info, put it back," so the collector now
+launches Marvel Snap itself (via Steam's `steam://rungameid/1997040`) when it isn't running, and
+closes it afterward only if this run launched it. Real issues found on cold launches and fixed,
+each confirmed from live step-by-step captures (`SNAPTRITOR_DEBUG_DIR`): a launch promo modal ate
+the navigation clicks (two Escapes before navigating); the Shop needs longer than T009's 500ms to
+load on first open (per-step settle times); the Cards sub-row now has 5 icons, so the Daily Cards
+click moved to the 3rd icon's real centre (0.502) — the user spotted this one directly; and the
+capture region was re-measured to cover only the Daily Cards block. Close-the-game and
+return-to-sleep moved into a `finally`, so a failed run no longer leaves the game open or a woken
+PC awake. "Check now" waits up to 4 minutes, not 25s, since a cold launch takes ~40s. Verified
+against the packaged v0.3.3 build itself, cold launch through upload through closing the game.

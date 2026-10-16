@@ -124,11 +124,12 @@ function sleep(ms: number): Promise<void> {
  * flash a loading state and then show the exact same (stale) last/next values, which looks like
  * it silently did nothing. Poll state.json's own `lastInspectionAt` for a change instead, so the
  * button's wait actually means something: either a real result lands, or this reports a timeout
- * explicitly rather than quietly giving up. 25s covers the slowest real path (navigation +
- * capture's own up-to-8s settle wait, plus the upload) with margin.
+ * explicitly rather than quietly giving up. 4 minutes covers the slowest real path — launching
+ * the game cold (~40s observed, up to inspect.ts's own 180s window/menu budget), navigating,
+ * capturing, uploading — with margin.
  */
 async function waitForInspectionToFinish(before: State): Promise<State> {
-  const deadline = Date.now() + 25_000;
+  const deadline = Date.now() + 240_000;
   while (Date.now() < deadline) {
     const state = readState();
     if (state.lastInspectionAt !== before.lastInspectionAt || state.lastError !== before.lastError) {
