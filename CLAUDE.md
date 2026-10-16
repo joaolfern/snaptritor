@@ -265,6 +265,16 @@ not just write it — useful, with real limits worth knowing before re-discoveri
   of the 9P/UNC redirector's own directory listing, not a real collision — if a future NSIS/7-Zip
   packaging step reports a "duplicate" that looks like a legitimate case-variant pair, check
   whether the output path is UNC-backed before assuming the source package is actually broken.
+- **`import { autoUpdater } from "electron-updater"` typechecks fine but crashes the packaged app
+  on launch** with `SyntaxError: Named export 'autoUpdater' not found` — `electron-updater` is
+  CommonJS, and Node's ESM loader statically analyzes a CJS module's exports (`cjs-module-lexer`)
+  to decide what counts as a real named export; it doesn't always find everything a CJS module
+  actually exposes at runtime, even though the package's own `.d.ts` (which only `tsc` reads, not
+  Node's loader) declares a named export. `tsc` raised no error at all — this is a real gap
+  between compile-time type-checking and runtime module resolution that only surfaces by actually
+  **running** the built app, not by compiling it; this exact mistake shipped in a release because
+  the build was verified by typecheck + "no warnings" rather than by launching it. Fix:
+  `import electronUpdater from "electron-updater"; const { autoUpdater } = electronUpdater;`.
 
 ## Cloudflare deployment (T016, validated — do not re-derive)
 

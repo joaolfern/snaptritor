@@ -13,11 +13,21 @@
  * — there is no shared compile-time check across this boundary.
  */
 import { app, BrowserWindow, ipcMain } from "electron";
-import { autoUpdater } from "electron-updater";
+// Not `import { autoUpdater } from "electron-updater"` — electron-updater is CommonJS, and
+// Node's ESM loader statically analyzes a CJS module's exports (cjs-module-lexer) to decide what
+// counts as a "named export"; it doesn't always find everything the package actually exposes at
+// runtime, even though the package's own .d.ts (which only TypeScript's type-checker reads, not
+// Node's loader) claims a named export exists. Confirmed live: this exact line crashed the
+// packaged app on launch with "SyntaxError: Named export 'autoUpdater' not found", despite `tsc`
+// raising no error at all — a real gap between compile-time type-checking and runtime module
+// resolution that only shows up by actually running the built app, not by compiling it.
+import electronUpdater from "electron-updater";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { dirname, join } from "node:path";
+
+const { autoUpdater } = electronUpdater;
 
 // Chromium's GPU process crashes fatally on this machine with zero flags (confirmed live: "GPU
 // process isn't usable. Goodbye", app exits) — these two avoid that. A *separate* problem (window

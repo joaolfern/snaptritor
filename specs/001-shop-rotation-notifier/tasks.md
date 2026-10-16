@@ -760,3 +760,15 @@ No orphans: every task below cites at least one requirement it serves.
     Flagged plainly to the user: this card art is Marvel/Second Dinner's copyrighted work, now
     committed directly into a **public** repo (not just baked into a binary) — the user chose to
     leave it as-is, low practical risk for a non-commercial personal fan project.
+
+**Follow-up fix, 2026-10-15 (after v0.2.0 shipped):** the user's real installed app crashed on
+launch with `SyntaxError: Named export 'autoUpdater' not found` — `import { autoUpdater } from
+"electron-updater"` typechecked cleanly (`tsc` never caught it) but crashed at actual runtime,
+since Node's ESM loader's static analysis of `electron-updater`'s CJS exports doesn't match what
+its `.d.ts` claims. This shipped because the build was verified by typecheck + "no build warnings"
+rather than by actually launching the app — a real process gap, now closed: fixed to `import
+electronUpdater from "electron-updater"; const { autoUpdater } = electronUpdater;`, verified by
+launching both the dev build and the real packaged `win-unpacked\Snaptritor.exe` and confirming
+(via a real screenshot, not just process-exit-code inspection, which was itself ambiguous for
+Electron's multi-process model) that the window opens cleanly with no error dialog. Published as
+v0.3.1.
