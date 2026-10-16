@@ -772,3 +772,50 @@ launching both the dev build and the real packaged `win-unpacked\Snaptritor.exe`
 (via a real screenshot, not just process-exit-code inspection, which was itself ambiguous for
 Electron's multi-process model) that the window opens cleanly with no error dialog. Published as
 v0.3.1.
+
+**Follow-up fixes, 2026-10-15 (after v0.3.1, from real post-install user testing):**
+
+- **UI gap, real user report:** "Last inspection"/"Next inspection" both showed "never yet"
+  indefinitely. Two separate causes: (1) `inspect.ts` always passed `nextInspectionAt: null` to
+  `recordInspection` — this field was never actually wired to a real value, even after a
+  successful run; (2) nothing triggered an inspection immediately after install or after pairing,
+  so "Last inspection" had nothing to show until the next scheduled boundary (hours away). Fixed:
+  `main.ts`'s `get-state` now asks Task Scheduler directly for the real next run time
+  (`Get-ScheduledTaskInfo`'s `NextRunTime`) instead of relying on state.json for it — single
+  source of truth, verified live (showed a real computed time against the actual registered task,
+  not "never yet"). `postinstall.ts` now triggers an immediate run (`Start-ScheduledTask`) when a
+  reinstall preserves an existing paired `collectorSecret`; `main.ts`'s pairing-claim handler does
+  the same right after a brand-new pairing succeeds (the first moment an inspection can actually
+  work, since `cli.ts` correctly refuses to run unpaired).
+- **Added a "Check now" button** (status.html/main.ts/preload.cts) so a paired user can force an
+  immediate inspection without waiting for a scheduled time — the handler waits (polling
+  state.json, 25s budget) for the triggered run to actually finish before returning, rather than
+  firing-and-forgetting and showing stale values, and surfaces a clear timeout message if nothing
+  changed in time. Also added a `lastError` display to the status view — tracked in state.json all
+  along but never actually shown anywhere, so a failed run (e.g. "game not running") was invisible
+  short of reading the raw file.
+- **Severe bug found via the "Check now" button, not caught by any prior verification**: every
+  real `--inspect` run in the packaged app crashed at module-import time (`TypeError: Mime is not
+  a constructor`, from a Windows NTFS case-collision between `mime@2.x`'s `mime.js` and `Mime.js`
+  silently merging into one corrupted file during packaging) — meaning the Scheduled Task had
+  never successfully completed a single inspection in any shipped version (v0.1.0–v0.3.1), and
+  would have silently done nothing forever. Full details and the fix (renaming the vendored
+  `Mime.js` to a non-colliding name) are in CLAUDE.md's corrected packaging note — this is the
+  canonical write-up; this entry exists so `tasks.md`'s own history doesn't read as if nothing was
+  wrong. Caught only because real post-install testing (clicking "Check now" against the actual
+  installed app) was finally exercised — building the installer and dry-running `cli.ts`'s
+  secret-check path (T013, T020) was never actually sufficient to prove `--inspect` itself
+  works, since that early-exit path never reached the crashing imports.
+- Verified against the real fresh build (not a same-machine manual patch): both an unpaired state
+  (reaches the "not paired yet" message cleanly) and a real paired state copied from the actual
+  installed app (reaches "Game window not found" cleanly, exit code 0) — confirming the crash is
+  gone and the pipeline now runs exactly as far as it should in each case. Published as v0.3.2.
+
+**Still open, raised directly by the user, not yet decided:** should the collector launch Marvel
+Snap itself if it isn't already running? RF02's acceptance criterion explicitly assumes the game
+is already launched as a precondition ("Given the game is launched, when the collector drives
+it...") — the collector has never been designed or built to launch it. The game runs via Steam
+(`steam://rungameid/1997040`, confirmed live via `Get-StartApps`). This is new, untested scope
+(launch + wait-for-load timing, unverified) versus the current zero-code alternative (the player
+leaves the game running before the PC sleeps, so it survives into the scheduled wake) — a real
+product decision, not something to build silently under time pressure.

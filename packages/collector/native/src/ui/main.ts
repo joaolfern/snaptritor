@@ -92,7 +92,66 @@ async function setWakeAutomationEnabled(enabled: boolean): Promise<void> {
   await runPowerShell(`${cmdlet} -TaskName ${psQuote(TASK_NAME)} -ErrorAction SilentlyContinue | Out-Null`);
 }
 
-ipcMain.handle("get-state", () => readState());
+// Found live, from a real user report: "Next inspection" showed "never yet" forever, even after
+// a successful run — inspect.ts has always passed `nextInspectionAt: null` to recordInspection,
+// so state.json's own copy of this field was never actually wired to a real value. Fix: ask
+// Task Scheduler directly for the real next run time instead of relying on state.json for it —
+// single source of truth (the registered triggers), and it stays correct even if the cadence
+// changes later without this file needing to know the actual times.
+async function getNextRunTime(): Promise<string | null> {
+  try {
+    const output = await runPowerShell(
+      `(Get-ScheduledTaskInfo -TaskName ${psQuote(TASK_NAME)} -ErrorAction Stop).NextRunTime.ToString("o")`,
+    );
+    const trimmed = output.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  } catch {
+    return null; // e.g. the task doesn't exist yet, or is disabled (no next run while paused)
+  }
+}
+
+async function startTaskNow(): Promise<void> {
+  await runPowerShell(`Start-ScheduledTask -TaskName ${psQuote(TASK_NAME)} -ErrorAction SilentlyContinue`);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * `Start-ScheduledTask` only signals Task Scheduler to begin the run — it returns immediately,
+ * long before `--inspect` itself finishes. A "Check now" button that just fired-and-forgot would
+ * flash a loading state and then show the exact same (stale) last/next values, which looks like
+ * it silently did nothing. Poll state.json's own `lastInspectionAt` for a change instead, so the
+ * button's wait actually means something: either a real result lands, or this reports a timeout
+ * explicitly rather than quietly giving up. 25s covers the slowest real path (navigation +
+ * capture's own up-to-8s settle wait, plus the upload) with margin.
+ */
+async function waitForInspectionToFinish(before: State): Promise<State> {
+  const deadline = Date.now() + 25_000;
+  while (Date.now() < deadline) {
+    const state = readState();
+    if (state.lastInspectionAt !== before.lastInspectionAt || state.lastError !== before.lastError) {
+      return state;
+    }
+    await sleep(1000);
+  }
+  throw new Error("Timed out waiting for the inspection to finish — is the game running?");
+}
+
+ipcMain.handle("get-state", async () => {
+  const state = readState();
+  state.nextInspectionAt = await getNextRunTime();
+  return state;
+});
+
+ipcMain.handle("check-now", async () => {
+  const before = readState();
+  await startTaskNow();
+  const state = await waitForInspectionToFinish(before);
+  state.nextInspectionAt = await getNextRunTime();
+  return state;
+});
 
 ipcMain.handle("set-inspection-paused", (_event, paused: boolean) => {
   const state = readState();
@@ -123,6 +182,13 @@ ipcMain.handle("claim-pairing-code", async (_event, code: string) => {
   const state = readState();
   state.collectorSecret = collectorSecret;
   writeState(state);
+  // A brand-new install has no collectorSecret until right now, so cli.ts correctly refused to
+  // run anything before this point — this is the first moment an inspection can actually
+  // succeed, so trigger one immediately rather than leaving "Last inspection" on "never yet"
+  // until the next scheduled boundary (the reinstall-with-existing-secret case is handled by
+  // postinstall.ts instead, since pairing already happened before this code path runs again).
+  await startTaskNow();
+  state.nextInspectionAt = await getNextRunTime();
   return state;
 });
 

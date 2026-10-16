@@ -9,4 +9,5 @@ contextBridge.exposeInMainWorld("snaptritor", {
   setInspectionPaused: (paused: boolean) => ipcRenderer.invoke("set-inspection-paused", paused),
   setWakePaused: (paused: boolean) => ipcRenderer.invoke("set-wake-paused", paused),
   claimPairingCode: (code: string) => ipcRenderer.invoke("claim-pairing-code", code),
+  checkNow: () => ipcRenderer.invoke("check-now"),
 });

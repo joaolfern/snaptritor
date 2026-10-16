@@ -11,9 +11,9 @@
  *   node postinstall.ts --uninstall
  */
 import { existsSync } from "node:fs";
-import { writeState } from "../../src/state.ts";
+import { readState, writeState } from "../../src/state.ts";
 import { INITIAL_COLLECTOR_STATE } from "../../../shared/src/index.ts";
-import { registerInspectionTask, unregisterTask } from "../src/scheduler.ts";
+import { registerInspectionTask, startTaskNow, unregisterTask } from "../src/scheduler.ts";
 
 const TASK_NAME = "SnaptritorInspection";
 // T018 (resolved 2026-10-15, by the user): the shop's daily reset is 19:00 UTC (16:00 BRT), and
@@ -54,6 +54,18 @@ async function install(): Promise<void> {
   });
 
   console.log(`Registered ${TASK_NAME} and wrote initial state at ${statePath}`);
+
+  // Found live, from a real reinstall: "Last inspection" stayed "never yet" for potentially
+  // hours, until the next scheduled boundary — nothing ran an inspection right after install.
+  // Only meaningful on a reinstall that preserves an existing paired state.json (a brand-new,
+  // never-paired install has no collectorSecret yet, and cli.ts correctly refuses to run without
+  // one — that case gets its own immediate trigger from main.ts, right after pairing succeeds,
+  // not from here).
+  const existingState = await readState(statePath);
+  if (existingState.collectorSecret) {
+    await startTaskNow(TASK_NAME);
+    console.log("Already paired — triggered an immediate inspection run.");
+  }
 }
 
 async function uninstall(): Promise<void> {

@@ -31,6 +31,8 @@
     <section id="status-view">
       <p>Last inspection: <span id="last-inspection">—</span></p>
       <p>Next inspection: <span id="next-inspection">—</span></p>
+      <p id="last-error" class="error"></p>
+      <button id="check-now-button" type="button">Check now</button>
       <div class="row">
         <label for="inspection-paused-toggle">Pause inspection</label>
         <input id="inspection-paused-toggle" type="checkbox" />
@@ -59,6 +61,10 @@
         document.getElementById("status-view").style.display = "block";
         document.getElementById("last-inspection").textContent = formatDate(state.lastInspectionAt);
         document.getElementById("next-inspection").textContent = formatDate(state.nextInspectionAt);
+        // NF06: this was being tracked in state.json all along but never actually shown anywhere
+        // — a failed run (e.g. "game not running") was invisible in the UI, only discoverable by
+        // reading the raw file.
+        document.getElementById("last-error").textContent = state.lastError ?? "";
         document.getElementById("inspection-paused-toggle").checked = state.inspectionPaused;
         document.getElementById("wake-paused-toggle").checked = state.wakeAutomationPaused;
       }
@@ -94,6 +100,22 @@
 
         document.getElementById("wake-paused-toggle").addEventListener("change", async (event) => {
           await window.snaptritor.setWakePaused(event.target.checked);
+        });
+
+        document.getElementById("check-now-button").addEventListener("click", async (event) => {
+          const button = event.target;
+          const errorEl = document.getElementById("last-error");
+          button.disabled = true;
+          button.textContent = "Checking…";
+          try {
+            const newState = await window.snaptritor.checkNow();
+            render(newState);
+          } catch (err) {
+            errorEl.textContent = err instanceof Error ? err.message : "Could not check now";
+          } finally {
+            button.disabled = false;
+            button.textContent = "Check now";
+          }
         });
       }
 

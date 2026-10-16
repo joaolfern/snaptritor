@@ -64,6 +64,18 @@ export async function setWakeAutomationEnabled(taskName: string, enabled: boolea
   await runPowerShell(`${cmdlet} -TaskName ${psQuote(taskName)} | Out-Null`);
 }
 
+/**
+ * Fires the task immediately (used by the installer right after registration, so "Last
+ * inspection" isn't stuck on "never yet" until the first scheduled boundary — found live, from a
+ * real user report after a real install: the status window had nothing to show for potentially
+ * hours). `Start-ScheduledTask` only signals Task Scheduler to begin the run and returns
+ * immediately — it does not wait for `--inspect` itself to finish, so this stays fast enough to
+ * call from the installer's own synchronous flow.
+ */
+export async function startTaskNow(taskName: string): Promise<void> {
+  await runPowerShell(`Start-ScheduledTask -TaskName ${psQuote(taskName)}`);
+}
+
 export interface TaskStatus {
   exists: boolean;
   enabled: boolean;

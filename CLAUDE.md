@@ -256,15 +256,45 @@ not just write it — useful, with real limits worth knowing before re-discoveri
   everything **except** `darwin/` into
   `%LOCALAPPDATA%\electron-builder\Cache\winCodeSign\winCodeSign-<version>\` ahead of the real
   build — electron-builder finds the pre-seeded cache and skips its own download/extract entirely.
-- **7-Zip's NSIS packaging step can report a false "Duplicate filename on disk"** for two
-  genuinely different, legitimately co-existing files that merely differ by case (hit with
-  `mime@2.x`'s real `mime.js` + `Mime.js` pair, pulled in transitively via `nut-js` → `jimp` →
-  `mime`) — but only reproduced when the build's **output directory** lived on the
-  `\\wsl.localhost\...` bridge; a real local Windows path for `directories.output` (e.g.
-  `C:\<scratch-dir>`) built the exact same input tree with no error. Likely a case-folding quirk
-  of the 9P/UNC redirector's own directory listing, not a real collision — if a future NSIS/7-Zip
-  packaging step reports a "duplicate" that looks like a legitimate case-variant pair, check
-  whether the output path is UNC-backed before assuming the source package is actually broken.
+- **CORRECTED (2026-10-15, was wrong below): a case-variant file pair like `mime@2.x`'s real
+  `mime.js` + `Mime.js` (pulled in transitively via `nut-js` → `jimp` → `mime`) is a genuine,
+  serious packaging hazard on Windows, not just a noisy 7-Zip false positive.** Moving
+  `directories.output` off the `\\wsl.localhost\...` bridge (original note below) does stop 7-Zip
+  from *erroring* — but the underlying problem is real: Windows' case-insensitive NTFS silently
+  merges the two case-variant files into **one** wherever they get extracted (the final installed
+  `resources\...\node_modules\mime\` on the target machine), keeping only one file's *content*
+  under one of the two *names* — confirmed live: the surviving file was physically named
+  `Mime.js` but contained `mime.js`'s actual content (a pre-built object, not the `Mime` class
+  `index.js` expects), so every real `--inspect` run crashed at module-import time with `TypeError:
+  Mime is not a constructor` — **before `inspect.ts` ever got to run, so even "game not found"
+  never printed; the Scheduled Task silently did nothing every single time it fired.** This shipped
+  silently in v0.1.0 through v0.3.1 — the installer *build itself* produced no error or warning at
+  any point in that whole span, since 7-Zip's complaint had already been suppressed by the
+  UNC-output fix, which addressed the symptom (a loud packaging error) without addressing the
+  cause (silent data loss from the same underlying case-collision, now happening one step later
+  and without comment). Only surfaced because a real user clicked a real "run now" button and the
+  result took 25s to time out instead of the ~1s a clean "game not found" takes — verifying that
+  the installer *built* was never enough; the packaged `--inspect` path specifically needed to be
+  *run* against the real installed `node_modules`, which nothing before this had done. Fixed at the
+  source (the WSL-side `node_modules/mime/` actually used for `extraResources`): renamed `Mime.js`
+  → `MimeClass.js` (no longer collides with `mime.js` on any case-insensitive filesystem) and
+  updated `index.js`'s `require('./Mime')` to match — a direct edit to a vendored `node_modules`
+  file, same category of fragile local fix as the `zod` symlink workaround elsewhere in this file,
+  so unlike that one, this one is **checked in as a script, not left to memory**:
+  `packages/collector/native/scripts/patch-mime.mjs` (idempotent — detects and skips an
+  already-patched tree) and wired into `npm run build:installer` as its first step. Run it by hand
+  (`npm run patch-mime` from a real local install, or `node scripts/patch-mime.mjs` directly over
+  the WSL/UNC bridge) after any fresh `npm install` here, same as the zod workaround needs redoing.
+  **Lesson
+  for the original 7-Zip note below: a build that stops erroring is not the same as a build that's
+  correct — when a packaging tool complains about something that sounds structurally real (two
+  files differing only by case), suspect silent corruption occurring *somewhere* in the pipeline,
+  not just noise at the one step that happened to raise its voice.**
+- *(Original note, 2026-10-15 — partially superseded by the correction above)* 7-Zip's NSIS
+  packaging step reports "Duplicate filename on disk" for a case-variant file pair specifically
+  when the build's **output directory** lives on the `\\wsl.localhost\...` bridge; a real local
+  Windows path for `directories.output` builds the same input tree with no *error* — but, per
+  above, that is not the same as the files being correct in the final install.
 - **`import { autoUpdater } from "electron-updater"` typechecks fine but crashes the packaged app
   on launch** with `SyntaxError: Named export 'autoUpdater' not found` — `electron-updater` is
   CommonJS, and Node's ESM loader statically analyzes a CJS module's exports (`cjs-module-lexer`)
