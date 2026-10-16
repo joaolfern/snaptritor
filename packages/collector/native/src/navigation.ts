@@ -27,6 +27,8 @@ export interface NavigationStep {
   description: string;
   xFraction: number;
   yFraction: number;
+  /** How long to wait after this click before the next one. */
+  settleMs: number;
 }
 
 /**
@@ -36,10 +38,16 @@ export interface NavigationStep {
  * last-viewed shop tab within a session — that memory cannot be relied on after a fresh launch,
  * which is exactly how the real collector will encounter it (RF02's "the game is launched").
  */
+// settleMs: T009's 500ms was tuned against an already-warm game, where the shop opened
+// instantly. A cold launch (the real unattended case) loads the Shop's content on first open, and
+// the next clicks fired before the panel existed — confirmed live: the capture landed on the
+// Shop's landing page, never reaching Daily Cards.
 export const NAVIGATE_TO_DAILY_CARDS: NavigationStep[] = [
-  { description: "Click Shop (top right of main menu)", xFraction: 0.711, yFraction: 0.04 },
-  { description: "Click the Cards tab (top right of the Shop panel)", xFraction: 0.606, yFraction: 0.086 },
-  { description: "Click the Daily Cards sub-tab (3rd of 4 icons under Cards)", xFraction: 0.555, yFraction: 0.136 },
+  { description: "Click Shop (top right of main menu)", xFraction: 0.711, yFraction: 0.04, settleMs: 4000 },
+  { description: "Click the Cards tab (top right of the Shop panel)", xFraction: 0.606, yFraction: 0.086, settleMs: 2500 },
+  // The Cards sub-row now has 5 icons (T009 saw 4), so the old 0.555 landed between the 3rd and 4th.
+  // The 3rd icon's centre measured from a live capture at 1920x1080: x≈963 → 0.502.
+  { description: "Click the Daily Cards sub-tab (3rd icon under Cards)", xFraction: 0.502, yFraction: 0.136, settleMs: 2000 },
 ];
 
 /**

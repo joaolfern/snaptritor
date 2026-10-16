@@ -16,9 +16,10 @@ import {
   writeState,
 } from "../../src/state.ts";
 import { DAILY_CARDS_REGION, GAME_WINDOW_TITLE, NAVIGATE_TO_DAILY_CARDS } from "./navigation.ts";
-import { clickProportional } from "./windows/click.ts";
+import { clickProportional, pressEscape } from "./windows/click.ts";
 import { capture, saveCapture, toHashablePixels } from "./windows/capture.ts";
-import { findWindow, focusWindow, type WindowRect } from "./windows/findWindow.ts";
+import { findWindow, focusWindow, type FoundWindow, type WindowRect } from "./windows/findWindow.ts";
+import { closeGame, isGameRunning, launchGame } from "./game.ts";
 
 export interface InspectOptions {
   statePath: string;
@@ -113,6 +114,69 @@ async function postInspection(options: {
  * T001–T002's state/hash logic with T007–T009's window/capture/click/navigation modules.
  */
 export async function runInspection(options: InspectOptions): Promise<void> {
+  const session = { launchedGame: false };
+  try {
+    await inspect(options, session);
+  } catch (err) {
+    const state = recordError(await readState(options.statePath), err instanceof Error ? err.message : String(err));
+    await writeState(options.statePath, state);
+    throw err;
+  } finally {
+    // RF02 + RF10, on every outcome — success, any failure, or paused. "Wake the PC, get the info,
+    // put it back": an early return or a throw must not leave a game this run launched open, or a
+    // PC this run woke sitting awake.
+    if (session.launchedGame) {
+      console.log("Closing the game this run launched.");
+      await closeGame();
+    }
+    if (options.dryRun) {
+      console.log("[dry-run] Skipping sleep (RF10 disabled for debugging).");
+    } else if (await wasAsleepBeforeThisRun()) {
+      await sleepPc();
+    } else {
+      console.log("PC was already awake before this run started; leaving it awake.");
+    }
+  }
+}
+
+const GAME_WINDOW_TIMEOUT_MS = 180_000;
+
+/**
+ * Launches the game if it isn't running and waits for its window and main menu (RF02). A window
+ * existing isn't enough — the game shows splash/loading screens first, and clicks sent during
+ * those are lost — so it also waits for the whole window to stop changing.
+ */
+async function ensureGameReady(session: { launchedGame: boolean }): Promise<FoundWindow | null> {
+  if (!(await isGameRunning())) {
+    console.log("Game not running; launching it via Steam.");
+    await launchGame();
+    session.launchedGame = true;
+  }
+
+  const deadline = Date.now() + GAME_WINDOW_TIMEOUT_MS;
+  let found: FoundWindow | null = null;
+  while (Date.now() < deadline && !found) {
+    found = await findWindow(GAME_WINDOW_TITLE);
+    if (!found) await sleep(2000);
+  }
+  if (!found || !session.launchedGame) return found;
+
+  await sleep(15_000);
+  let previousHash: string | null = null;
+  while (Date.now() < deadline) {
+    const current = await findWindow(GAME_WINDOW_TITLE);
+    if (!current) return null;
+    await focusWindow(current);
+    const hashable = await toHashablePixels(await capture(current.rect));
+    const hash = perceptualHash(hashable.data, hashable.width, hashable.height, hashable.channels);
+    if (previousHash !== null && isSameImage(previousHash, hash)) return current;
+    previousHash = hash;
+    await sleep(3000);
+  }
+  return null;
+}
+
+async function inspect(options: InspectOptions, session: { launchedGame: boolean }): Promise<void> {
   let state = await readState(options.statePath);
 
   if (!shouldRunInspection(state)) {
@@ -120,9 +184,9 @@ export async function runInspection(options: InspectOptions): Promise<void> {
     return;
   }
 
-  const found = await findWindow(GAME_WINDOW_TITLE);
+  const found = await ensureGameReady(session);
   if (!found) {
-    state = recordError(state, `Game window "${GAME_WINDOW_TITLE}" not found — is the game running?`);
+    state = recordError(state, `Game didn't reach its main menu within ${GAME_WINDOW_TIMEOUT_MS / 1000}s`);
     await writeState(options.statePath, state);
     console.error(state.lastError);
     return;
@@ -131,10 +195,24 @@ export async function runInspection(options: InspectOptions): Promise<void> {
   await focusWindow(found);
   await sleep(300);
 
-  for (const step of NAVIGATE_TO_DAILY_CARDS) {
+  // A fresh launch can open on a promo modal over the main menu (confirmed live: the first real
+  // launch-and-inspect run's three navigation clicks all landed on the modal, and the "shop"
+  // capture it uploaded was just the main menu). Two Escapes dismiss it before navigating.
+  for (let i = 0; i < 2; i++) {
+    await pressEscape();
+    await sleep(700);
+  }
+
+  // SNAPTRITOR_DEBUG_DIR: saves the full game window after each step, so a navigation that stops
+  // short (no upload, "unchanged") can actually be seen instead of guessed at.
+  const debugDir = process.env.SNAPTRITOR_DEBUG_DIR;
+  if (debugDir) await saveCapture(await capture(found.rect), join(debugDir, "step-0-before.png"));
+
+  for (const [i, step] of NAVIGATE_TO_DAILY_CARDS.entries()) {
     console.log(`Navigating: ${step.description}`);
     await clickProportional(found.rect, step.xFraction, step.yFraction);
-    await sleep(500);
+    await sleep(step.settleMs);
+    if (debugDir) await saveCapture(await capture(found.rect), join(debugDir, `step-${i + 1}.png`));
   }
 
   const region = regionFromFractions(found.rect, DAILY_CARDS_REGION);
@@ -168,18 +246,6 @@ export async function runInspection(options: InspectOptions): Promise<void> {
 
   state = recordInspection(state, { inspectedAt: capturedAt, nextInspectionAt: null, imageHash });
   await writeState(options.statePath, state);
-
-  // RF10, for both outcomes above — the run is finished either way. Only re-sleep the PC if this
-  // run's own wake-capable trigger is what woke it (the user's correction): a scheduled inspection
-  // that happens to run while the player is actively using the PC for something else must not yank
-  // it to sleep out from under them.
-  if (options.dryRun) {
-    console.log("[dry-run] Skipping sleep (RF10 disabled for debugging).");
-  } else if (await wasAsleepBeforeThisRun()) {
-    await sleepPc();
-  } else {
-    console.log("PC was already awake before this run started; leaving it awake.");
-  }
 }
 
 /**

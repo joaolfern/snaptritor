@@ -69,7 +69,7 @@ only the screen itself, once the shop is on it.
 | ID | Requirement |
 | --- | --- |
 | RF01 | Wake the PC automatically via Wake-on-LAN at scheduled times. |
-| RF02 | Bring the game's Shop → Cards screen into view, since nothing reflects the live offer without it (feature `000`). |
+| RF02 | Launch the game if it isn't already running, bring its Shop → Cards screen into view (nothing reflects the live offer without it — feature `000`), and close the game again afterward if this run is what launched it. |
 | RF03 | Capture a screenshot of the shop once it is in view. |
 | RF04 | Detect whether the shop changed relative to the previously captured screenshot. |
 | RF05 | Send the captured screenshot onward only when it changed. |
@@ -105,9 +105,14 @@ only the screen itself, once the shop is on it.
 
 - **RF01** — Given the PC is asleep and Wake-on-LAN is configured, when the scheduled time arrives,
   then the machine is awake and collection has started within 2 minutes.
-- **RF02** — Given the game is launched, when the collector drives it, then the Shop → Cards
-  screen ends up visibly on screen and fully loaded (no spinner, no error), confirmed the same way
-  a person would confirm it — by what is on screen, not by a file.
+- **RF02** — Given the game is not running, when an inspection starts, then the collector launches
+  it and waits for it to load before driving it; given it is running, then it is driven as-is.
+  Either way, the Shop → Cards screen ends up visibly on screen and fully loaded (no spinner, no
+  error), confirmed the same way a person would confirm it — by what is on screen, not by a file.
+  When the run finishes (success or failure), a game this run launched is closed again; a game the
+  player already had open is left alone. Corrected 2026-10-15 by the user: the scope was always
+  "wake the PC, get the info, put it back" — the earlier "given the game is launched" wording
+  silently made the unattended case impossible, since nothing is running after a wake from sleep.
 - **RF03** — Given the shop is in view, when the collector captures it, then the result is an image
   of that screen (or the relevant region of it), timestamped, with no text or card identity decoded
   out of it anywhere in the pipeline.

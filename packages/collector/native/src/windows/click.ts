@@ -1,4 +1,10 @@
-import { Button, mouse, Point, straightTo } from "@nut-tree-fork/nut-js";
+import { Button, Key, keyboard, mouse, Point, straightTo } from "@nut-tree-fork/nut-js";
+
+/** Taps Escape once (press + release) in whatever window currently has focus. */
+export async function pressEscape(): Promise<void> {
+  await keyboard.pressKey(Key.Escape);
+  await keyboard.releaseKey(Key.Escape);
+}
 import type { WindowRect } from "./findWindow.ts";
 
 /**
